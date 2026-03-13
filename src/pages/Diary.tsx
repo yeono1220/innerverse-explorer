@@ -4,21 +4,58 @@ import { useNavigate } from "react-router-dom";
 import StarField from "@/components/StarField";
 import EmotionBar from "@/components/EmotionBar";
 
-const MOCK_RESULT = [
-  { label: "기쁨", value: 45, color: "hsl(45, 96%, 55%)" },
-  { label: "슬픔", value: 15, color: "hsl(217, 91%, 60%)" },
-  { label: "분노", value: 5, color: "hsl(348, 83%, 60%)" },
-  { label: "불안", value: 20, color: "hsl(258, 58%, 58%)" },
-  { label: "평온", value: 60, color: "hsl(187, 80%, 42%)" },
+type Emotion = {
+  label: string;
+  value: number;
+  color: string;
+  keywords: string[];
+};
+
+const EMOTION_BASELINE: Emotion[] = [
+  { label: "기쁨", value: 20, color: "hsl(45, 96%, 55%)", keywords: ["기쁘", "행복", "뿌듯", "좋", "감사", "신나", "설레"] },
+  { label: "슬픔", value: 20, color: "hsl(217, 91%, 60%)", keywords: ["슬프", "우울", "눈물", "힘들", "외롭", "지쳤"] },
+  { label: "분노", value: 20, color: "hsl(348, 83%, 60%)", keywords: ["화", "짜증", "답답", "억울", "열받", "분노"] },
+  { label: "불안", value: 20, color: "hsl(258, 58%, 58%)", keywords: ["불안", "걱정", "초조", "긴장", "무섭", "두렵"] },
+  { label: "평온", value: 20, color: "hsl(187, 80%, 42%)", keywords: ["평온", "편안", "안정", "차분", "괜찮", "담담"] },
 ];
+
+const analyzeEmotion = (input: string): Emotion[] => {
+  const normalized = input.toLowerCase();
+
+  const scored = EMOTION_BASELINE.map((emotion) => {
+    const matchedCount = emotion.keywords.reduce((count, keyword) => {
+      return count + (normalized.includes(keyword) ? 1 : 0);
+    }, 0);
+
+    return {
+      ...emotion,
+      value: emotion.value + matchedCount * 18,
+    };
+  });
+
+  const total = scored.reduce((sum, emotion) => sum + emotion.value, 0);
+
+  return scored.map((emotion) => ({
+    ...emotion,
+    value: Math.round((emotion.value / total) * 100),
+  }));
+};
 
 const Diary = () => {
   const navigate = useNavigate();
   const [text, setText] = useState("");
   const [phase, setPhase] = useState<"write" | "loading" | "result">("write");
+  const [result, setResult] = useState(EMOTION_BASELINE);
+  const [insight, setInsight] = useState("");
 
   const handleSubmit = () => {
     if (!text.trim()) return;
+
+    const analyzed = analyzeEmotion(text);
+    const strongest = [...analyzed].sort((a, b) => b.value - a.value)[0];
+
+    setResult(analyzed);
+    setInsight(`오늘은 '${strongest.label}' 감정이 가장 크게 포착됐어요. 이 감정이 올라온 순간을 떠올리며, 나를 지켜준 행동 하나를 적어보세요.`);
     setPhase("loading");
     setTimeout(() => setPhase("result"), 2500);
   };
@@ -103,13 +140,17 @@ const Diary = () => {
             >
               <div className="text-center mb-8">
                 <h2 className="font-display text-3xl text-foreground mb-2">감정 분석 결과</h2>
-                <p className="text-muted-foreground text-sm font-body">오늘의 감정 스펙트럼</p>
+                <p className="text-muted-foreground text-sm font-body">오늘 작성한 일기 기반 AI 감정 스펙트럼</p>
               </div>
 
               <div className="bg-card border border-border rounded-xl p-6 space-y-5 border-glow">
-                {MOCK_RESULT.map((emotion, i) => (
+                {result.map((emotion, i) => (
                   <EmotionBar key={emotion.label} {...emotion} delay={i * 0.15} />
                 ))}
+              </div>
+
+              <div className="bg-card/70 border border-border rounded-xl p-5 text-sm font-body text-muted-foreground leading-relaxed">
+                {insight}
               </div>
 
               <div className="flex justify-center gap-4 pt-4">
