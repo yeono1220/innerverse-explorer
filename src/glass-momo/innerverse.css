@@ -1,0 +1,477 @@
+/* INNERVERSE - 글래스 모모 화면 전용 스타일
+   레퍼런스 HTML(innerverse-3d-glass-momo.html)의 디자인을 그대로 이식.
+   기존 shadcn 토큰(index.css)과 충돌하지 않도록 .iv- prefix + 컨테이너 스코프 사용. */
+
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css");
+
+.iv-stage {
+  --iv-bg1: #1b1430;
+  --iv-bg2: #0c0a16;
+  --iv-bg3: #07060d;
+  --iv-surf: rgba(25, 21, 39, 0.74);
+  --iv-line: rgba(255, 255, 255, 0.1);
+  --iv-txt: #f4f3fa;
+  --iv-txt2: #9b95ad;
+  --iv-txt3: #6a6480;
+  --iv-purple: #8b7ff0;
+  --iv-purple2: #a394f7;
+  --iv-amber: #d99a4e;
+  --iv-green: #5fc88a;
+  --iv-love: #e87fb8;
+  --iv-sad: #6f9ae8;
+  --iv-empty: #8a82a0;
+
+  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--iv-txt);
+  background: radial-gradient(1200px 800px at 70% -10%, #1b1430, #0c0a16 55%, #07060d 100%);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 26px 16px 56px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.iv-stage * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.iv-lead {
+  max-width: 392px;
+  text-align: center;
+}
+.iv-lead .iv-k {
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  color: var(--iv-purple2);
+  font-weight: 700;
+}
+.iv-lead h1 {
+  font-size: 21px;
+  font-weight: 800;
+  margin-top: 6px;
+}
+.iv-lead p {
+  font-size: 12.5px;
+  color: var(--iv-txt2);
+  margin-top: 8px;
+  line-height: 1.6;
+}
+.iv-lead p b {
+  color: var(--iv-purple2);
+}
+
+/* 폰 프레임 */
+.iv-phone {
+  position: relative;
+  width: 392px;
+  height: 850px;
+  border-radius: 46px;
+  background: #000;
+  padding: 11px;
+  box-shadow: 0 0 0 2px #2a2740, 0 30px 90px -20px rgba(0, 0, 0, 0.85),
+    0 0 90px -16px rgba(124, 111, 232, 0.35);
+  flex: 0 0 auto;
+}
+.iv-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 36px;
+  overflow: hidden;
+  background: #07060d;
+}
+.iv-notch {
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 118px;
+  height: 26px;
+  background: #000;
+  border-radius: 0 0 16px 16px;
+  z-index: 40;
+}
+
+.iv-canvas-host {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.iv-canvas-host canvas {
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+.iv-canvas-host canvas:active {
+  cursor: grabbing;
+}
+
+.iv-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+}
+.iv-overlay > *,
+.iv-overlay button {
+  pointer-events: auto;
+}
+
+/* 상태바 */
+.iv-statusbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+.iv-statusbar .iv-sb-r {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 1px;
+}
+
+/* 상단 탑바 */
+.iv-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 6px 22px 0;
+}
+.iv-topbar .iv-cap {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--iv-purple2);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.iv-topbar h2 {
+  font-size: 23px;
+  font-weight: 800;
+  margin-top: 3px;
+  color: var(--iv-txt);
+}
+.iv-lvl {
+  font-size: 12px;
+  color: var(--iv-txt2);
+  margin-top: 5px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.iv-lvlpill {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #7c6fe8, #a394f7);
+  padding: 3px 9px;
+  border-radius: 999px;
+  transition: 0.5s;
+}
+
+.iv-iconbtn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--iv-surf);
+  border: 1px solid var(--iv-line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+/* 감정 누적 미터 */
+.iv-meter {
+  position: absolute;
+  right: 22px;
+  top: 120px;
+  width: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  background: var(--iv-surf);
+  border: 1px solid var(--iv-line);
+  border-radius: 14px;
+  padding: 11px;
+  backdrop-filter: blur(12px);
+}
+.iv-meter .iv-h {
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  color: var(--iv-txt3);
+  text-transform: uppercase;
+  text-align: center;
+}
+.iv-meter .iv-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.iv-meter .iv-row .iv-d {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.iv-meter .iv-row .iv-t {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.iv-meter .iv-row .iv-t i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s;
+}
+.iv-meter .iv-row .iv-v {
+  font-size: 9px;
+  color: var(--iv-txt2);
+  width: 22px;
+  text-align: right;
+}
+
+/* 말풍선 */
+.iv-speech {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 290px;
+  max-width: 286px;
+  background: rgba(25, 21, 39, 0.92);
+  border: 1px solid var(--iv-line);
+  border-radius: 18px;
+  padding: 12px 16px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  text-align: center;
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  transition: opacity 0.45s;
+  pointer-events: none;
+  color: var(--iv-txt);
+}
+.iv-speech.on {
+  opacity: 1;
+}
+.iv-speech::after {
+  content: "";
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 14px;
+  height: 14px;
+  background: rgba(25, 21, 39, 0.92);
+  border-right: 1px solid var(--iv-line);
+  border-bottom: 1px solid var(--iv-line);
+}
+
+/* 분기 결과 배너 */
+.iv-outcome {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  top: 170px;
+  background: var(--iv-surf);
+  border: 1px solid var(--iv-line);
+  border-radius: 16px;
+  padding: 13px 16px;
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: 0.5s;
+  text-align: center;
+}
+.iv-outcome.on {
+  opacity: 1;
+  transform: translateY(0);
+}
+.iv-outcome .iv-nm {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--iv-txt);
+}
+.iv-outcome .iv-ds {
+  font-size: 11.5px;
+  color: var(--iv-txt2);
+  margin-top: 3px;
+}
+
+/* 모드 토글 */
+.iv-modeToggle {
+  position: absolute;
+  top: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  background: var(--iv-surf);
+  border: 1px solid var(--iv-line);
+  border-radius: 999px;
+  padding: 4px;
+  backdrop-filter: blur(12px);
+  z-index: 6;
+}
+.iv-modeToggle.show {
+  display: flex;
+}
+.iv-modeToggle button {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--iv-txt2);
+  background: none;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.iv-modeToggle button.on {
+  background: linear-gradient(135deg, #7c6fe8, #a394f7);
+  color: #fff;
+}
+
+/* 하단 도크 */
+.iv-dock {
+  margin-top: auto;
+  padding: 0 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.iv-feedlabel {
+  font-size: 11px;
+  color: var(--iv-txt3);
+  text-align: center;
+}
+.iv-feed {
+  display: flex;
+  gap: 8px;
+}
+.iv-fb {
+  flex: 1;
+  padding: 13px 6px;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  background: var(--iv-surf);
+  border: 1px solid var(--iv-line);
+  backdrop-filter: blur(12px);
+  transition: 0.15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.iv-fb:active {
+  transform: scale(0.95);
+}
+.iv-fb .iv-e {
+  font-size: 18px;
+}
+.iv-fb.pos {
+  box-shadow: inset 0 0 0 1px rgba(95, 200, 138, 0.3);
+}
+.iv-fb.neg {
+  box-shadow: inset 0 0 0 1px rgba(111, 154, 232, 0.3);
+}
+
+.iv-actions {
+  display: flex;
+  gap: 10px;
+}
+.iv-act {
+  flex: 1;
+  padding: 13px;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  background: var(--iv-surf);
+  border: 1px solid var(--iv-line);
+  backdrop-filter: blur(12px);
+  transition: 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.iv-act:active {
+  transform: scale(0.97);
+}
+.iv-act.primary {
+  background: linear-gradient(135deg, #7c6fe8, #a394f7);
+  border-color: transparent;
+}
+
+.iv-reset {
+  display: flex;
+  justify-content: center;
+}
+.iv-resetbtn {
+  font: inherit;
+  font-size: 11px;
+  color: var(--iv-txt3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* 로딩 */
+.iv-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+  background: #07060d;
+  transition: opacity 0.6s;
+}
+.iv-loading.hide {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+.iv-loading .iv-ring {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.12);
+  border-top-color: var(--iv-purple2);
+  animation: iv-spin 1s linear infinite;
+}
+@keyframes iv-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.iv-loading .iv-t {
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--iv-txt3);
+}

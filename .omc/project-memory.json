@@ -1,0 +1,354 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1779609940144,
+  "projectRoot": "c:\\Users\\user\\innerverse-explorer",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "tsconfig.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "react",
+        "version": "18.3.1",
+        "category": "frontend"
+      },
+      {
+        "name": "react-dom",
+        "version": "18.3.1",
+        "category": "frontend"
+      },
+      {
+        "name": "vite",
+        "version": "5.4.19",
+        "category": "build"
+      },
+      {
+        "name": "vitest",
+        "version": "3.2.4",
+        "category": "testing"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "bun build",
+    "testCommand": "bun test",
+    "lintCommand": "bun lint",
+    "devCommand": "bun dev",
+    "scripts": {
+      "dev": "vite",
+      "build": "vite build",
+      "build:dev": "vite build --mode development",
+      "lint": "eslint .",
+      "preview": "vite preview",
+      "test": "vitest run",
+      "test:watch": "vitest"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": "type-based"
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "public",
+      "src"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "backend": {
+      "path": "backend",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1779609939669,
+      "keyFiles": [
+        "main.py"
+      ]
+    },
+    "public": {
+      "path": "public",
+      "purpose": "Public files",
+      "fileCount": 3,
+      "lastAccessed": 1779609939858,
+      "keyFiles": [
+        "favicon.ico",
+        "placeholder.svg",
+        "robots.txt"
+      ]
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 5,
+      "lastAccessed": 1779609939871,
+      "keyFiles": [
+        "App.css",
+        "App.tsx",
+        "index.css",
+        "main.tsx",
+        "vite-env.d.ts"
+      ]
+    },
+    "src\\components": {
+      "path": "src\\components",
+      "purpose": "UI components",
+      "fileCount": 5,
+      "lastAccessed": 1779609939983,
+      "keyFiles": [
+        "EmotionBar.tsx",
+        "EmotionCalendar.tsx",
+        "NavLink.tsx"
+      ]
+    },
+    "src\\lib": {
+      "path": "src\\lib",
+      "purpose": "Library code",
+      "fileCount": 1,
+      "lastAccessed": 1779609940003,
+      "keyFiles": [
+        "utils.ts"
+      ]
+    },
+    "src\\pages": {
+      "path": "src\\pages",
+      "purpose": "Page components",
+      "fileCount": 5,
+      "lastAccessed": 1779609940023,
+      "keyFiles": [
+        "Dashboard.tsx",
+        "Diary.tsx",
+        "Index.tsx"
+      ]
+    },
+    "src\\test": {
+      "path": "src\\test",
+      "purpose": "Test files",
+      "fileCount": 2,
+      "lastAccessed": 1779609940029,
+      "keyFiles": [
+        "example.test.ts",
+        "setup.ts"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "src\\pages\\Diary.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1779610187770,
+      "type": "file"
+    },
+    {
+      "path": "package.json",
+      "accessCount": 2,
+      "lastAccessed": 1779610144317,
+      "type": "file"
+    },
+    {
+      "path": "src\\pages\\Index.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1779610864109,
+      "type": "file"
+    },
+    {
+      "path": "src\\App.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1779610865868,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\innerverse.css",
+      "accessCount": 2,
+      "lastAccessed": 1779611179707,
+      "type": "file"
+    },
+    {
+      "path": "vite.config.ts",
+      "accessCount": 2,
+      "lastAccessed": 1779621317268,
+      "type": "file"
+    },
+    {
+      "path": ".claude\\launch.json",
+      "accessCount": 2,
+      "lastAccessed": 1779621319276,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\GlassMomoScene.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1779621566388,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\Scene.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1779621601428,
+      "type": "file"
+    },
+    {
+      "path": "src\\pages\\naver.html",
+      "accessCount": 1,
+      "lastAccessed": 1779609970216,
+      "type": "file"
+    },
+    {
+      "path": "src\\index.css",
+      "accessCount": 1,
+      "lastAccessed": 1779610187285,
+      "type": "file"
+    },
+    {
+      "path": "tailwind.config.ts",
+      "accessCount": 1,
+      "lastAccessed": 1779610347248,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\constants.ts",
+      "accessCount": 1,
+      "lastAccessed": 1779610602978,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\sharedRefs.ts",
+      "accessCount": 1,
+      "lastAccessed": 1779610607389,
+      "type": "file"
+    },
+    {
+      "path": "src\\store\\emotionStore.ts",
+      "accessCount": 1,
+      "lastAccessed": 1779610627684,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\ProceduralEnv.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610687465,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\SurfaceFormations.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610721160,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\GlassMomo.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610740614,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\GlassPlanet.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610758100,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\FriendPlanet.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610767278,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\FriendStreaks.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610780588,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\EmotionParticles.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610797704,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\CameraRig.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610802710,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\overlay\\StatusBar.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610812551,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\overlay\\TopBar.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610816014,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\overlay\\EmotionMeter.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610822222,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\overlay\\SpeechBubble.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610824999,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\overlay\\OutcomeBanner.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610828840,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\overlay\\ModeToggle.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610834992,
+      "type": "file"
+    },
+    {
+      "path": "src\\glass-momo\\overlay\\EmotionDock.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610844005,
+      "type": "file"
+    },
+    {
+      "path": "src\\pages\\NotFound.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610958936,
+      "type": "file"
+    },
+    {
+      "path": "src\\main.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779610959709,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}
