@@ -1,22 +1,23 @@
 // 메인 글래스 행성.
 // 유리 외피 + 내부 영혼 구체(펄스) + 대기 셸 + 표면 형성물 + 모모.
 // 드래그 회전(관성) + 키스토어 분기에 따라 색/표면 갱신.
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useEmotionStore, BRANCH } from "@/store/emotionStore";
 import { planetRot } from "./sharedRefs";
 import { SurfaceFormations } from "./SurfaceFormations";
-import { GlassMomo } from "./GlassMomo";
+import { StageMomo } from "./StageMomo";
 
 export function GlassPlanet() {
   const branch = useEmotionStore((s) => s.branch);
   const amount = useEmotionStore((s) => s.branchAmount);
   const tint = BRANCH[branch].tint;
-  const soulColor = BRANCH[branch].soul;
+  const targetCol = useMemo(() => new THREE.Color(tint), [tint]);
 
   const grp = useRef<THREE.Group>(null);
-  const soulMat = useRef<THREE.MeshStandardMaterial>(null);
+  const shellMat = useRef<THREE.MeshStandardMaterial>(null);
+  const atmoMat = useRef<THREE.MeshBasicMaterial>(null);
   const { gl } = useThree();
 
   // 캔버스 드래그 → 행성 회전 + 관성
@@ -58,7 +59,16 @@ export function GlassPlanet() {
     };
   }, [gl]);
 
-  useFrame((state) => {
+  // 초기 색 세팅 (이후 전환은 useFrame의 lerp가 담당)
+  useEffect(() => {
+    const c = new THREE.Color(tint);
+    shellMat.current?.color.copy(c);
+    shellMat.current?.emissive.copy(c);
+    atmoMat.current?.color.copy(c);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useFrame((state, dt) => {
     if (!grp.current) return;
     // 관성 자동 회전
     if (!planetRot.dragging) {
@@ -69,61 +79,49 @@ export function GlassPlanet() {
     grp.current.rotation.y = planetRot.y;
     grp.current.rotation.x = planetRot.x;
 
-    // 영혼 펄스
-    if (soulMat.current) {
-      const pulse = 0.9 + Math.sin(state.clock.elapsedTime * 2) * 0.15;
-      soulMat.current.emissiveIntensity = pulse;
+    // 감정 분기 색으로 부드럽게 전환 (감정에 따라 행성 색이 바뀜)
+    const k = Math.min(1, dt * 3);
+    if (shellMat.current) {
+      shellMat.current.color.lerp(targetCol, k);
+      shellMat.current.emissive.lerp(targetCol, k);
+      shellMat.current.emissiveIntensity = 0.16 + Math.sin(state.clock.elapsedTime * 2) * 0.1;
     }
+    if (atmoMat.current) atmoMat.current.color.lerp(targetCol, k);
   });
 
   return (
     <group ref={grp}>
-      {/* 외피 유리 */}
+      {/* 본체 — flat-shaded 지오데식 (디오라마 결정면 룩). 색은 useFrame에서 lerp */}
       <mesh>
-        <icosahedronGeometry args={[1.55, 6]} />
-        <meshPhysicalMaterial
-          color={tint}
-          metalness={0}
-          roughness={0.08}
-          transmission={0.9}
-          thickness={1.4}
-          ior={1.35}
-          clearcoat={1}
-          clearcoatRoughness={0.12}
-          envMapIntensity={1.1}
-          transparent
-          attenuationColor={tint}
-          attenuationDistance={2.2}
-          emissive={tint}
-          emissiveIntensity={0.06}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-
-      {/* 내부 영혼 */}
-      <mesh>
-        <icosahedronGeometry args={[0.7, 4]} />
+        <icosahedronGeometry args={[1.55, 3]} />
         <meshStandardMaterial
-          ref={soulMat}
-          color={soulColor}
-          emissive={soulColor}
-          emissiveIntensity={0.9}
+          ref={shellMat}
+          flatShading
           roughness={0.5}
+          metalness={0.1}
+          emissiveIntensity={0.16}
         />
       </mesh>
 
-      {/* 대기 셸 */}
+      {/* 대기 글로우 셸 (additive) */}
       <mesh>
-        <sphereGeometry args={[1.74, 48, 48]} />
-        <meshBasicMaterial color={tint} transparent opacity={0.1} side={THREE.BackSide} />
+        <sphereGeometry args={[1.78, 48, 48]} />
+        <meshBasicMaterial
+          ref={atmoMat}
+          transparent
+          opacity={0.14}
+          side={THREE.BackSide}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
       </mesh>
 
       {/* 표면 형성물 */}
       <SurfaceFormations branch={branch} amount={amount} />
 
-      {/* 모모 (행성 표면에 얹힘) */}
-      <group position={[0, 0, 1.7]}>
-        <GlassMomo ownerSlot="momo" />
+      {/* 성장 아바타 모모 (행성 표면에 얹힘) */}
+      <group position={[0, 0, 1.62]} scale={0.6}>
+        <StageMomo ownerSlot="momo" />
       </group>
     </group>
   );

@@ -13,14 +13,13 @@ const PINK_SOUL = 0xf3a5cc;
 export function FriendPlanet() {
   const friendMode = useEmotionStore((s) => s.friendMode);
   const grp = useRef<THREE.Group>(null);
-  const soulMat = useRef<THREE.MeshStandardMaterial>(null);
+  const shellMat = useRef<THREE.MeshStandardMaterial>(null);
 
   useFrame((state, dt) => {
     if (!grp.current) return;
     grp.current.rotation.y -= 0.004;
-    if (soulMat.current) {
-      const pulse = 0.9 + Math.sin(state.clock.elapsedTime * 2 + 0.7) * 0.15;
-      soulMat.current.emissiveIntensity = pulse;
+    if (shellMat.current) {
+      shellMat.current.emissiveIntensity = 0.16 + Math.sin(state.clock.elapsedTime * 2 + 0.7) * 0.1;
     }
   });
 
@@ -28,39 +27,30 @@ export function FriendPlanet() {
 
   return (
     <group ref={grp} position={[4.2, 0, 0]} scale={0.78}>
+      {/* 본체 — flat-shaded 지오데식 (디오라마 결정면 룩) */}
       <mesh>
-        <icosahedronGeometry args={[1.55, 6]} />
-        <meshPhysicalMaterial
-          color={PINK}
-          metalness={0}
-          roughness={0.08}
-          transmission={0.9}
-          thickness={1.4}
-          ior={1.35}
-          clearcoat={1}
-          clearcoatRoughness={0.12}
-          envMapIntensity={1.1}
-          transparent
-          attenuationColor={PINK}
-          attenuationDistance={2.2}
-          emissive={PINK}
-          emissiveIntensity={0.06}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-      <mesh>
-        <icosahedronGeometry args={[0.7, 4]} />
+        <icosahedronGeometry args={[1.55, 3]} />
         <meshStandardMaterial
-          ref={soulMat}
-          color={PINK_SOUL}
-          emissive={PINK_SOUL}
-          emissiveIntensity={0.9}
+          ref={shellMat}
+          color={PINK}
+          flatShading
           roughness={0.5}
+          metalness={0.1}
+          emissive={PINK}
+          emissiveIntensity={0.16}
         />
       </mesh>
+      {/* 대기 글로우 셸 (additive) */}
       <mesh>
-        <sphereGeometry args={[1.74, 48, 48]} />
-        <meshBasicMaterial color={PINK} transparent opacity={0.1} side={THREE.BackSide} />
+        <sphereGeometry args={[1.78, 48, 48]} />
+        <meshBasicMaterial
+          color={PINK}
+          transparent
+          opacity={0.14}
+          side={THREE.BackSide}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
       </mesh>
       <SurfaceFormations branch="calm" amount={0.6} />
       <group position={[0, 0, 1.7]}>

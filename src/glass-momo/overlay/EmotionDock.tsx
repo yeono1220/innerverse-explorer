@@ -1,14 +1,15 @@
 // 하단 도크: 감정 5버튼 + 대화/친구 액션 + 리셋 텍스트버튼.
 import { useEmotionStore, type EmoKey } from "@/store/emotionStore";
 
-type Feed = { key: EmoKey; emoji: string; label: string; group: "pos" | "neg" };
+type Feed = { key: EmoKey; emoji: string; label: string; en: string; color: string };
 
+// Russell 순환모형 5감정 (고양/평온/긴장/격앙/침체)
 const FEEDS: Feed[] = [
-  { key: "pos", emoji: "😊", label: "기쁨·뿌듯", group: "pos" },
-  { key: "calm", emoji: "🌿", label: "차분·안도", group: "pos" },
-  { key: "ten", emoji: "😰", label: "긴장·불안", group: "neg" },
-  { key: "sad", emoji: "🥲", label: "슬픔", group: "neg" },
-  { key: "emp", emoji: "🌫️", label: "공허", group: "neg" },
+  { key: "pos", emoji: "🤩", label: "고양", en: "Elated", color: "#3ec074" },
+  { key: "calm", emoji: "😌", label: "평온", en: "Serene", color: "#46a6e6" },
+  { key: "ten", emoji: "😬", label: "긴장", en: "Tense", color: "#d99a4e" },
+  { key: "sad", emoji: "😠", label: "격앙", en: "Agitated", color: "#e0574e" },
+  { key: "emp", emoji: "😞", label: "침체", en: "Depressed", color: "#9090c8" },
 ];
 
 export function EmotionDock() {
@@ -25,11 +26,13 @@ export function EmotionDock() {
         {FEEDS.map((f) => (
           <button
             key={f.key}
-            className={`iv-fb ${f.group}`}
+            className="iv-fb"
+            style={{ boxShadow: `inset 0 0 0 1px ${f.color}55`, color: "#fff" }}
             onClick={() => feed(f.key)}
-            aria-label={`감정 ${f.label}`}
+            aria-label={`감정 ${f.label} (${f.en})`}
+            title={f.en}
           >
-            <span className="iv-e" aria-hidden="true">
+            <span className="iv-e" aria-hidden="true" style={{ color: f.color }}>
               {f.emoji}
             </span>
             {f.label}

@@ -1,4 +1,4 @@
-// 우상단 감정 누적 미터 (긍정/긴장/슬픔/공허)
+// 우상단 감정 누적 미터 — 5감정 (고양/평온/긴장/격앙/침체)
 import { useEmotionStore } from "@/store/emotionStore";
 
 function cap(v: number) {
@@ -8,10 +8,11 @@ function cap(v: number) {
 export function EmotionMeter() {
   const emo = useEmotionStore((s) => s.emo);
   const rows: Array<{ k: string; color: string; val: number }> = [
-    { k: "pos", color: "var(--iv-green)", val: cap(emo.pos + emo.calm) },
-    { k: "ten", color: "var(--iv-amber)", val: cap(emo.ten) },
-    { k: "sad", color: "var(--iv-sad)", val: cap(emo.sad) },
-    { k: "emp", color: "var(--iv-empty)", val: cap(emo.emp) },
+    { k: "고양", color: "#3ec074", val: cap(emo.pos) },
+    { k: "평온", color: "#46a6e6", val: cap(emo.calm) },
+    { k: "긴장", color: "#d99a4e", val: cap(emo.ten) },
+    { k: "격앙", color: "#e0574e", val: cap(emo.sad) },
+    { k: "침체", color: "#9090c8", val: cap(emo.emp) },
   ];
   return (
     <div className="iv-meter" aria-label="감정 누적">

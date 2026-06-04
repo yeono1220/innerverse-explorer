@@ -16,10 +16,11 @@
   --iv-purple: #8b7ff0;
   --iv-purple2: #a394f7;
   --iv-amber: #d99a4e;
-  --iv-green: #5fc88a;
+  --iv-green: #3ec074;
   --iv-love: #e87fb8;
-  --iv-sad: #6f9ae8;
-  --iv-empty: #8a82a0;
+  --iv-calm: #46a6e6;
+  --iv-sad: #e0574e;
+  --iv-empty: #9090c8;
 
   font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--iv-txt);
