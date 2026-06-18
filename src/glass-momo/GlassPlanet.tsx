@@ -12,8 +12,34 @@ import { StageMomo } from "./StageMomo";
 export function GlassPlanet() {
   const branch = useEmotionStore((s) => s.branch);
   const amount = useEmotionStore((s) => s.branchAmount);
-  const tint = BRANCH[branch].tint;
-  const targetCol = useMemo(() => new THREE.Color(tint), [tint]);
+  const emo = useEmotionStore((s) => s.emo);
+
+  // Russell 순환모형: 5감정은 불연속 라벨이 아니라 2축 위의 정박점.
+  // 누적 감정 '비율'에 따라 행성 색을 연속 블렌딩한다.
+  const emoColors = useMemo(
+    () => ({
+      pos: new THREE.Color(BRANCH.bloom.tint), // 고양
+      calm: new THREE.Color(BRANCH.calm.tint), // 평온
+      ten: new THREE.Color(BRANCH.tense.tint), // 긴장
+      sad: new THREE.Color(BRANCH.wither.tint), // 격앙
+      emp: new THREE.Color(BRANCH.void.tint), // 침체
+    }),
+    [],
+  );
+  const targetCol = useMemo(() => {
+    const c = new THREE.Color(0, 0, 0);
+    let total = 0;
+    (["pos", "calm", "ten", "sad", "emp"] as const).forEach((k) => {
+      const w = Math.max(0, emo[k] || 0);
+      total += w;
+      c.r += emoColors[k].r * w;
+      c.g += emoColors[k].g * w;
+      c.b += emoColors[k].b * w;
+    });
+    if (total > 0) c.multiplyScalar(1 / total);
+    else c.set(0x6f6f8f);
+    return c;
+  }, [emo, emoColors]);
 
   const grp = useRef<THREE.Group>(null);
   const shellMat = useRef<THREE.MeshStandardMaterial>(null);
@@ -61,7 +87,7 @@ export function GlassPlanet() {
 
   // 초기 색 세팅 (이후 전환은 useFrame의 lerp가 담당)
   useEffect(() => {
-    const c = new THREE.Color(tint);
+    const c = targetCol.clone();
     shellMat.current?.color.copy(c);
     shellMat.current?.emissive.copy(c);
     atmoMat.current?.color.copy(c);

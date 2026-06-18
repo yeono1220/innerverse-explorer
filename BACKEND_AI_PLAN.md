@@ -168,10 +168,35 @@ React 19는 **R3F v9 + drei v10 + three 최신**이 함께 필요:
 
 ## 7. 단계별 구축 로드맵
 
-- **Phase 0 — 토대:** API 계약 고정 · Supabase 프로젝트·스키마·RLS · `.env` · `/api/analyze` 5감정으로 교체
-- **Phase 1 — 코어 루프:** Auth(로그인) · 일기 CRUD · GPT 감정분석 연결 → **행성 색(5감정 블렌딩) 실제 반영** · streak→성장단계
-- **Phase 2 — 케어(닥터컨텍):** 위기 스크리닝 · 모모 답장 · escalate → 상담/전문가 연계 · counselors/bookings
-- **Phase 3 — 소셜(C2C):** 친구 · 은하수 · 행성 방문(코인) · 위로의 하트 · 교환일기
+- ✅ **Phase 0 — 토대 (완료 2026-06):** API 계약 고정 · 스키마·RLS migration · `.env` · `/api/analyze` 5감정 교체
+  - `backend/main.py`: `/api/analyze`를 5감정(pos/calm/ten/sad/emp)+dominant+keywords+crisis_score로 교체. dominant는 프론트 `decideBranch` 포팅(로직 일치 검증 완료). 나머지 5개 엔드포인트(momo/reply·crisis/check·vision·weekly·insights) 스텁 + Pydantic 모델. CORS는 `ALLOWED_ORIGINS` env로.
+  - `src/lib/api-types.ts`: 6개 응답 타입, `EmoKey`/`BranchKey`는 constants.ts에서 재사용(드리프트 방지). tsc 통과.
+  - `supabase/migrations/0001_init.sql`: 2절 전체 스키마 + RLS(본인 user_id, 행성 방문 읽기, 양자관계 당사자, counselors 공개읽기).
+  - `.env.example` + `.gitignore`(.env/__pycache__ 등) + `backend/requirements.txt`.
+  - ⏭️ 남은 셋업(수동): Supabase 프로젝트 생성 후 migration 적용, `.env` 실제 값 채우기.
+  - ⚠️ Phase 1: `analyze_with_llm()` 채우면 자동으로 LLM 우선·휴리스틱 폴백 동작.
+- ✅ **Phase 1 — 코어 루프 (코드 완료 2026-06, 키 주입 시 동작):**
+  - `src/lib/supabase.ts`(lazy·env가드) · `src/services/auth.ts` · `src/hooks/useAuth.ts` · `src/pages/Login.tsx`(+`/login` 라우트) — Auth.
+  - `src/lib/api.ts`(analyze/momo/crisis fetch 래퍼) · `src/services/diary.ts`(일기 CRUD + 분석 저장 + planets upsert).
+  - `src/store/emotionStore.ts`에 `setEmotions()` 추가 → 분석 5감정이 **행성 색에 실반영**(GlassPlanet이 emo 블렌딩).
+  - `src/components/DiaryComposer.tsx`(`/experience` 오버레이): 일기 → /api/analyze → 행성색 + 모모 답장 + (로그인 시) 저장. 위기면 전문가 아웃링크.
+  - 백엔드 `analyze_with_llm()`: structured output(프롬프트 4-1) 실제 구현. **Gemini/OpenAI 자동 분기**(`_get_llm()`: GEMINI_API_KEY 우선 → OPENAI_API_KEY → 휴리스틱). Gemini는 OpenAI 호환 엔드포인트라 같은 SDK 사용. 모델: `GEMINI_MODEL`(기본 gemini-2.5-flash) / `OPENAI_MODEL`.
+  - streak→성장단계는 기존 `streakToStage` 사용(로그인 시 프로필 streak 하이드레이트는 Phase 2에서 연결).
+  - `@supabase/supabase-js` 의존성 추가(package.json).
+  - ⚠️ 검증 메모: 신규 파일 tsc 클린. 편집 파일(App/Index/emotionStore)은 샌드박스 마운트 캐시 이슈로 tsc 거짓에러 → 로컬에서 `npm run build` 한 번 돌려 최종 확인 권장.
+  - ⏭️ 키 주입 후: Supabase에 0001_init.sql 적용 + `.env`(VITE_SUPABASE_*, OPENAI_API_KEY) → 바로 동작.
+- ✅ **Phase 2 — 케어(닥터컨텍) (코드 완료 2026-06):**
+  - `src/services/care.ts`: 상담사 목록 · 위기 이벤트 기록(escalated/dismissed) · 예약(중개, 수수료 20% 자동).
+  - `src/components/CarePanel.tsx`: escalate 시 상담사 목록·연결 모달 + 1393 안내. DiaryComposer 위기 버튼 → `uiStore.openCare()` 연결.
+  - 백엔드 `/api/momo/reply`·`/api/crisis/check` 이미 escalate 로직 보유(Phase 0). 진단금지·아웃링크 원칙 유지.
+- ✅ **Phase 3 — 소셜(C2C) (코드 완료 2026-06):**
+  - `src/services/social.ts`: 친구 검색/요청/수락 · 행성 방문(코인 `spend_coins`) · 위로의 하트(유료) · 교환일기.
+  - `src/services/profile.ts`: ensureProfile(로그인 시 멱등 생성) · 코인 RPC.
+  - `src/components/SocialPanel.tsx`: 친구/요청 목록 · 검색·추가 · 방문/하트(코인 표시). `/experience` 우상단 "🌌 친구" 런처.
+  - `src/store/uiStore.ts`: 케어/소셜 패널 토글.
+  - migration `0002_social_and_seed.sql`: `user_cards` 공개뷰(email 비노출) · `spend_coins`/`add_coins` RPC · 상담사 5곳 시드.
+  - ⚠️ 검증: 신규 6파일 tsc 클린. 편집 파일(App/Index/DiaryComposer/emotionStore)은 샌드박스 마운트 캐시로 tsc 거짓에러 → 로컬 `npm run build` 확인 권장.
+  - ⏭️ 3D 연동(은하수 지도에 실제 친구 행성 배치 등)은 다음 단계. 현재는 패널 UI + 데이터까지.
 - **Phase 4 — 멀티모달·리뷰:** Whisper STT · Vision 사진 · 주간 리뷰/캘린더
 - **Phase 5 — 데이터/보안:** 동의 등급제 · 마스킹 · (B2B) 집계+차분 프라이버시 · 행동패턴 조작검증
 

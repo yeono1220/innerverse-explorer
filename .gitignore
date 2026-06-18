@@ -12,6 +12,18 @@ dist
 dist-ssr
 *.local
 
+# Secrets — 절대 커밋 금지 (BACKEND_AI_PLAN.md 규율 3)
+.env
+.env.*
+!.env.example
+backend/.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
