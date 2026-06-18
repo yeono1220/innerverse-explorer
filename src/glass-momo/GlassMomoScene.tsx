@@ -1,5 +1,7 @@
 // 폰 프레임 + Canvas + 모든 2D 오버레이를 합성하는 최상위 화면 컴포넌트.
 import { useEffect, useState } from "react";
+import { useEmotionStore } from "@/store/emotionStore";
+import { useGrowthPreview, type GrowthStage } from "./growthStages";
 import { Scene } from "./Scene";
 import { StatusBar } from "./overlay/StatusBar";
 import { TopBar } from "./overlay/TopBar";
@@ -12,6 +14,15 @@ import "./innerverse.css";
 
 export function GlassMomoScene() {
   const [loaded, setLoaded] = useState(false);
+
+  // 데모: 감정을 기록할 때마다 모모가 한 단계씩 성장 (0회 씨앗 → 6회 광휘).
+  // burstTick은 감정 버튼(feed)에서만 증가하고 '대화하기'에선 안 올라간다.
+  const burstTick = useEmotionStore((s) => s.burstTick);
+  const setGrowthPreview = useGrowthPreview((s) => s.setPreview);
+  useEffect(() => {
+    setGrowthPreview(Math.min(7, 1 + burstTick) as GrowthStage);
+  }, [burstTick, setGrowthPreview]);
+  useEffect(() => () => setGrowthPreview(null), [setGrowthPreview]); // 화면 떠날 때 원복
 
   useEffect(() => {
     // 유리 셰이더 컴파일 시간을 살짝 가려주는 짧은 페이드아웃
@@ -30,9 +41,9 @@ export function GlassMomoScene() {
         <div className="iv-k">3D · GLASS MOMO · EMOTION EVOLUTION</div>
         <h1>감정이 모모를 빚는다</h1>
         <p>
-          모모는 <b>유리</b>, 행성은 <b>결정면 디오라마</b>예요. 아래 감정 버튼으로 마음을 쌓아보세요.{" "}
-          <b>긍정이 쌓이면 씨앗→숲으로 피어나고</b>, 부정·공허가 쌓이면{" "}
-          <b>전혀 다른 행성</b>으로 갈라집니다. 드래그로 돌려보세요.
+          모모는 <b>유리</b>, 행성은 <b>결정면 디오라마</b>예요. 아래 감정 버튼으로 마음을 기록해보세요.{" "}
+          <b>기록할수록 모모가 씨앗→광휘로 자라고</b>, 감정 비율에 따라{" "}
+          <b>행성 색이 연속으로 바뀝니다</b>. 드래그로 돌려보세요.
         </p>
       </div>
 
