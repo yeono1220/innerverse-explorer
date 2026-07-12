@@ -71,6 +71,7 @@ export async function momoReply(input: {
   text: string;
   emotions?: Record<string, number>;
   context?: string[];
+  history?: string[] ; profile?: string;
 }): Promise<{ reply: string; escalate: boolean }> {
   const res = await fetch(`${API_BASE}/api/momo/reply`, {
     method: "POST",

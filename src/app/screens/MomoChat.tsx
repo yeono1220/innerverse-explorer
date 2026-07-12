@@ -45,8 +45,12 @@ export default function MomoChat() {
     const t = text.trim();
     if (!t) return;
     const rule = REPLIES.find((r) => r.keys.test(t));
-    setMsgs((m) => [...m, { id: Date.now(), who: "me", text: t, emo: rule?.emo }]);
+    const userMsg: Msg = { id: Date.now(), who: "me", text: t, emo: rule?.emo };
+    setMsgs((m) => [...m, userMsg]);
     setInput("");
+
+    // 최근 6개 대화 기록을 history로 전달
+    const history = [...msgs, userMsg].slice(-6).map((m) => `${m.who}: ${m.text}`);
 
     // RAG: 과거 일기 검색 → 모모 답장에 컨텍스트 주입
     let reply = rule?.reply ?? "조금 더 들려줄래? 어떤 순간이었는지.";
@@ -58,6 +62,7 @@ export default function MomoChat() {
       const r = await momoReply({
         text: t,
         context: hits.map((h) => h.snippet),
+        history,
         profile: memoryPromptBlock(mem),
       });
       if (r?.reply) reply = r.reply;

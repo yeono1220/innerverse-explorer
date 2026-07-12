@@ -35,6 +35,8 @@ from analyzers import (
     build_analyzer,
 )
 
+import asyncio
+
 # backend/.env 자동 로드 (python-dotenv 없으면 무시)
 try:
     from dotenv import load_dotenv
@@ -453,7 +455,7 @@ async def analyze_diary(
     audio_file: UploadFile | None = File(None),
     text_data: str | None = Form(None),
 ):
-    """일기(text/audio) → 5감정 + dominant + keywords + crisis_score.
+    """일기(text/audio) → 5감정 + dominant + keywords + crisis_score
     응답 규격 = 프론트 emotionStore / api-types.ts 와 1:1.
     analyzer.analyze() 우선, 실패 시 휴리스틱 폴백."""
     extracted_text = text_data or ""
@@ -475,7 +477,7 @@ async def analyze_diary(
     
     analyzer = build_analyzer()
     try:
-        raw = analyzer.analyze(extracted_text)
+        raw = await asyncio.to_thread(analyzer.analyze, extracted_text)
         # dummy 는 고정 안전값 → 휴리스틱으로 보강해서 실제 텍스트 반영
         if raw.get("_dummy"):
             return _heuristic_analyze(extracted_text)
@@ -501,11 +503,13 @@ async def momo_reply(req: MomoReplyRequest):
     if req.emotions:
         e = req.emotions
         parts.append(f"현재 감정비율 pos{e.pos}/calm{e.calm}/ten{e.ten}/sad{e.sad}/emp{e.emp}")
+    if req.history:
+        parts.append("직전 대화:\n" + "\n".join(req.history[-6:]))
     parts.append(f"사용자: {req.text}")
     if escalate:
         parts.append("(위기 신호 감지됨 — 위로 후 전문가 연계를 부드럽게 권할 것)")
 
-    reply = _gen_text(PROMPT_MOMO_SYSTEM, "\n\n".join(parts))
+    reply = await asyncio.to_thread(_gen_text, PROMPT_MOMO_SYSTEM, "\n\n".join(parts))
     if not reply:
         if escalate:
             reply = "많이 힘들었구나. 지금은 저보다 전문가의 도움이 필요한 순간 같아요. 비대면 상담을 연결해 드릴까요?"
@@ -514,7 +518,6 @@ async def momo_reply(req: MomoReplyRequest):
         else:
             reply = "그 마음 충분히 그럴 수 있어. 오늘은 작은 한 걸음만 같이 떠올려보자."
     return MomoReplyResponse(reply=reply.strip(), escalate=escalate)
-
 
 @app.post("/api/embed", response_model=EmbedResponse)
 def embed(req: EmbedRequest):
@@ -583,7 +586,6 @@ def reflect(req: ReflectRequest):
 
 @app.post("/api/crisis/check", response_model=CrisisCheckResponse)
 async def crisis_check(req: CrisisCheckRequest):
-    """위기 스크리닝 (트리거 신호일 뿐, 진단 아님). 연계는 항상 사용자 선택."""
     score = heuristic_crisis(req.text)
     return CrisisCheckResponse(
         risk_score=score,
