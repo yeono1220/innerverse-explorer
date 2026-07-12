@@ -18,15 +18,15 @@ API 계약 = BACKEND_AI_PLAN.md 3절. 응답 규격은 프론트 `src/store/emot
 """
 from __future__ import annotations
 
+import asyncio
+
 import os
 import shutil
 from typing import Literal, Optional
-
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from config import settings
 from providers import build_provider
 from analyzers import (
     PROMPT_MOMO_SYSTEM,
@@ -34,8 +34,6 @@ from analyzers import (
     active_backend_name,
     build_analyzer,
 )
-
-import asyncio
 
 # backend/.env 자동 로드 (python-dotenv 없으면 무시)
 try:
@@ -48,6 +46,9 @@ except ImportError:
 app = FastAPI(title="Innerverse AI Backend", version="0.1.0")
 
 # 🚨 CORS — 배포 시 CORS_ORIGINS 를 실제 프론트 도메인으로 좁힐 것 (config.py)
+from config import settings
+from schema import attach_colors
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -410,7 +411,52 @@ def _gen_text(system: str, user: str) -> Optional[str]:
 @app.get("/")
 def read_root():
     return {"message": "Innerverse AI Server is running!", "version": app.version}
+# ── 분석기 지연 초기화 ──
+# 시작 시 한 번만 생성해 재사용. 초기화가 실패해도 서버는 뜨게 하고 dummy 로 폴백 → 부분 장애가 전체 다운으로 안 번지게.
+_analyzer: Analyzer | None = None
 
+def get_analyzer() -> Analyzer:
+    global _analyzer
+    if _analyzer is None:
+        try:
+            _analyzer = build_analyzer()
+        except Exception as e:
+            print(f"[main] 분석기 초기화 실패({e}) → dummy 로 폴백")
+    print(f"[main] 분석기 로드: {_analyzer.name}")
+    return _analyzer
+
+@app.get("/")
+def read_root():
+    return {"message": "Innerverse AI Server is running!",
+            "analyzer": get_analyzer().name}
+
+@app.get("/health")
+def health():
+    a = get_analyzer()
+    return {
+        "status": "ok",
+        "analyzer_backend": settings.ANALYZER_BACKEND,   # 축 1 (설정값)
+        "active_analyzer": a.name,                        # 축 1 (실제 로드)
+        # 축 2 는 vLLM 을 실제로 쓸 때만 의미. 그 외엔 None 으로 표시.
+        "vllm_provider": getattr(a, "provider_name", None),
+    }
+
+async def _run_analysis(text: str) -> dict:
+    """
+    분석기 호출 + 공통 후처리(색상) + 폴백을 한곳에서.
+    동기 .analyze 를 스레드풀에서 돌려 async 라우터를 막지 않는다.
+    """
+    analyzer = get_analyzer()
+    try:
+        result = await asyncio.to_thread(analyzer.analyze, text)
+    except Exception as e:
+        print(f"[main] 분석 실패({analyzer.name}): {e}")
+        if settings.FALLBACK_TO_DUMMY:
+            result = analyzer.analyze(text)
+        else:
+            raise
+    # 어떤 조합이든 반드시 이 후처리를 거쳐 색을 입힌다.
+    return attach_colors(result)
 
 @app.get("/health")
 def health():
@@ -669,7 +715,18 @@ async def weekly_review(uid: str):
 
 
 @app.post("/api/insights")
-async def insights():
-    """집계·차분 프라이버시 적용 B2B 인사이트 (Phase 5). 개인 식별 불가. 현재는 스텁."""
+async def insights(extracted_text: str = Form(...)):
+    # end of Phase 0 stubs
+    # 분석 단계: 텍스트를 분석기에 전달하고 결과를 받는다.
+
+    analysis = await _run_analysis(extracted_text)
+    """집계·차분 프라이버시 적용 B2B 인사이트 (Phase 5). 개인 식별 불가. 현재는 스텁.
     return {"status": "not_implemented", "phase": 5}
-# end of Phase 0 stubs
+"""
+    # 3. 프론트엔드로 분석 결과 (JSON) 반환
+    return {
+            "status": "success",
+            "extracted_text": extracted_text,
+            "emotions": analysis["emotions"],
+            "relationships": analysis["relationships"],
+        }

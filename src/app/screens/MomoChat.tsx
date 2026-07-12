@@ -42,36 +42,40 @@ export default function MomoChat() {
   }, [msgs.length]);
 
   const send = async (text: string) => {
-    const t = text.trim();
-    if (!t) return;
-    const rule = REPLIES.find((r) => r.keys.test(t));
-    const userMsg: Msg = { id: Date.now(), who: "me", text: t, emo: rule?.emo };
-    setMsgs((m) => [...m, userMsg]);
-    setInput("");
+  const t = text.trim();
+  if (!t) return;
+  const rule = REPLIES.find((r) => r.keys.test(t));
+  const userMsg: Msg = { id: Date.now(), who: "me", text: t, emo: rule?.emo };
+
+  // 사용자 메시지 + '생각 중' 버블을 즉시 표시 → 멈춘 느낌 제거
+  const thinkingId = userMsg.id + 1;
+  setMsgs((m) => [...m, userMsg, { id: thinkingId, who: "momo", text: "…" }]);
+  setInput("");
 
     // 최근 6개 대화 기록을 history로 전달
-    const history = [...msgs, userMsg].slice(-6).map((m) => `${m.who}: ${m.text}`);
+  const history = [...msgs, userMsg].slice(-6).map((m) => `${m.who}: ${m.text}`);
 
     // RAG: 과거 일기 검색 → 모모 답장에 컨텍스트 주입
-    let reply = rule?.reply ?? "조금 더 들려줄래? 어떤 순간이었는지.";
-    let memory: string[] = [];
-    try {
-      const hits = await ragContext(t);
-      memory = hits.map((h) => h.preview);
-      const mem = await getMemory();
-      const r = await momoReply({
-        text: t,
-        context: hits.map((h) => h.snippet),
-        history,
-        profile: memoryPromptBlock(mem),
-      });
-      if (r?.reply) reply = r.reply;
-      if (r?.escalate) window.setTimeout(() => setCareOpen(true), 700); // 위기 감지 → 상담 연계
-    } catch {
-      /* 백엔드 실패 → 로컬 규칙 답장 유지 */
-    }
-    setMsgs((m) => [...m, { id: Date.now() + 1, who: "momo", text: reply, memory }]);
-  };
+  let reply = rule?.reply ?? "조금 더 들려줄래? 어떤 순간이었는지.";
+  let memory: string[] = [];
+  try {
+    // 서로 독립인 두 조회를 병렬로 (직렬 → 병렬)
+    const [hits, mem] = await Promise.all([ragContext(t), getMemory()]);
+    memory = hits.map((h) => h.preview);
+    const r = await momoReply({
+      text: t,
+      context: hits.map((h) => h.snippet),
+      history,
+      profile: memoryPromptBlock(mem),
+    });
+    if (r?.reply) reply = r.reply;
+    if (r?.escalate) window.setTimeout(() => setCareOpen(true), 700);
+  } catch {
+    /* 백엔드 실패 → 로컬 규칙 답장 유지 */
+  }
+  // '생각 중' 버블을 실제 답장으로 교체
+  setMsgs((m) => m.map((msg) => (msg.id === thinkingId ? { ...msg, text: reply, memory } : msg)));
+};
 
   return (
     <>
