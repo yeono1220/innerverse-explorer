@@ -22,8 +22,18 @@
     ANALYZER_BACKEND=vllm  VLLM_PROVIDER=runpod      # RunPod 위 vLLM
 """
 import os
+from pathlib import Path
 
-
+# ── .env 로드는 Settings 평가 전에! ──
+try: 
+    from dotenv import load_dotenv
+    _base = Path(__file__).resolve().parent
+    for _p in (_base / ".env.local", _base / ".env",
+                _base.parent / ".env.local", _base.parent / ".env"):
+        load_dotenv(_p, override=False)
+except ImportError:
+    pass
+        
 class Settings:
     # ── 축 1: 분석기 선택 ──
     ANALYZER_BACKEND: str = os.getenv("ANALYZER_BACKEND", "dummy").lower()
@@ -51,7 +61,12 @@ class Settings:
 
     # ── Gemini 설정 ──
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-pro")
+    # 테스트 시 ai studio 에서 제공하는 모델 중 3.5 선택. 실제 배포 시 수정
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+
+    # ── Claude(Anthropic) 설정 ──
+    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+    CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 
     # ── 텍스트 생성(모모 답장 등) 온도 ──
     GEN_TEMPERATURE: float = float(os.getenv("GEN_TEMPERATURE", "0.6"))

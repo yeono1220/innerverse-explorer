@@ -13,22 +13,24 @@ Analyzer 계층 — 축 1: '무엇으로' 분석하는가.
 주의(동기 클라이언트):
     명료함을 위해 동기 클라이언트를 쓴다. 트래픽이 늘면 Async 계열로 바꾸거나
     run_in_executor 로 감싼다 → main.py 는 이미 asyncio.to_thread 로 감싸둠.
+
+** 토글 구조 **
+    gemini / claude : 호스팅 LLM (공통 _LLMAnalyzer 상속, _complete()만 구현)
+    vllm            : 직접 서빙(OpenAI 호환)
+    dummy           : 외부 호출 없는 고정 결과(기본/폴백)
 """
 from __future__ import annotations
 
 import abc
+import time
 import json
 from typing import Optional
 
 from config import settings
-# from schema import ANALYSIS_JSON_SCHEMA, SYSTEM_PROMPT
 from providers import build_provider
+from pydantic import BaseModel
 
-
-# ─────────────────────────────────────────────────────────────
-# 공통 프롬프트 (BACKEND_AI_PLAN.md 4-1 / 4-2)
-#   analyze 프롬프트는 main.py 와 동일 규격. 한 곳에서 관리하려고 여기로 옮김.
-# ─────────────────────────────────────────────────────────────
+# ── 공통 프롬프트 ──────────────────────────────────────────────
 PROMPT_ANALYZE = (
     "너는 감정 분석기다. 사용자의 일기를 읽고 Russell 순환모형 5감정의 '비율'을 0~100으로 매겨라.\n"
     "- pos 고양(긍정·높은각성) / calm 평온(긍정·낮은각성) / ten 긴장(부정·높은각성)\n"
@@ -48,8 +50,7 @@ PROMPT_MOMO_SYSTEM = (
     "너는 '모모', 유리로 빚어진 다정한 AI 감정 동반자다.\n"
     "- 짧고(2~3문장) 따뜻하게. 판단·훈계·진단 금지.\n"
     "- CBT 톤: 감정을 인정 → 생각을 살짝 다시 보게 → 작은 한 걸음 제안.\n"
-    "- 아래 '과거 기록'이 있으면 자연스럽게 인용해 '나를 기억하는' 느낌을 줘라 "
-    "(예: 지난번 발표 때도 비슷했는데 잘 넘겼잖아).\n"
+    "- 아래 '과거 기록'이 있으면 자연스럽게 인용해 '나를 기억하는' 느낌을 줘라.\n"
     "- 진단·의료행위 금지. 위기 신호가 강하면 위로 후 전문가 연계를 부드럽게 권한다."
 )
 
@@ -60,7 +61,39 @@ def _strip_code_fence(s: str) -> str:
     s = s.removeprefix("```json").removeprefix("```").removesuffix("```")
     return s.strip()
 
-# 추상 베이스
+import re
+# Gemini 구조화 출력용 스키마 - circular import 방지 위해 여기 정의
+
+class _DiaryEmotion(BaseModel):
+    label: str
+    pct: int
+
+
+class _DiaryResult(BaseModel):
+    emotions: list[_DiaryEmotion]
+    primary: str
+
+class AnalyzeSchema(BaseModel):
+    pos: int
+    calm: int
+    ten: int
+    sad: int
+    emp: int
+    dominant: str
+    keywords: list[str]
+    crisis_score: float
+    diary: _DiaryResult
+
+def _parse_json_object(raw: str) -> dict:
+    """LLM JSON 안전 파싱: 코드펜스 제거 + 바깥 {...} 블록만 추출."""
+    s = _strip_code_fence(raw)
+    if not s.lstrip().startswith("{"):
+        m = re.search(r"\{.*\}", s, re.DOTALL)
+        if m:
+            s = m.group(0)
+    return json.loads(s)
+
+# ── 추상 베이스 ────────────────────────────────────────────────
 class Analyzer(abc.ABC):
     name: str = "base"
 
@@ -71,10 +104,40 @@ class Analyzer(abc.ABC):
 
     @abc.abstractmethod
     def generate(self, system: str, user: str) -> str:
-        """system+user → 텍스트 응답(모모 답장 등). 실패 시 예외"""
+        """system+user → 텍스트 응답(모모 답장 등). 실패 시 예외."""
+        raise NotImplementedError
+
+
+# ── 호스팅 LLM 공통(gemini/claude) ────────────────────────────
+#   analyze()=JSON 강제 / generate()=자유 텍스트 로직을 여기 한 곳에만 둔다.
+#   서브클래스는 '전송 계층' _complete() 하나만 구현하면 됨 → 토글이 깔끔.
+class _LLMAnalyzer(Analyzer):
+    ANALYZE_SYSTEM = "너는 JSON만 출력하는 감정 분석기다. 코드펜스 없이 순수 JSON만."
+
+    def analyze(self, text: str) -> dict:
+        raw = self._complete(
+            system=self.ANALYZE_SYSTEM,
+            user=PROMPT_ANALYZE.format(text=text),
+            # max_tokens=1024,
+            max_tokens=2048,  # 토큰 수 넉넉히 - thinking + json 여유
+            temperature=settings.ANALYZE_TEMPERATURE,
+            json_mode=True,
+            schema=AnalyzeSchema,
+        )
+        return _parse_json_object(raw)
+
+    def generate(self, system: str, user: str) -> str:
+        return self._complete(
+            system=system, user=user,
+            max_tokens=512, temperature=settings.GEN_TEMPERATURE,
+            json_mode=False, schema=None,
+        )
+
+    def _complete(self, *, system: str, user: str, max_tokens: int,
+                  temperature: float, json_mode: bool, schema=None) -> str:
         raise NotImplementedError
     '''
-    # vision 은 선택 기능. 지원 안 하면 NotImplementedError.
+    # vision 은 선택 기능
     def analyze_image(self, mime: str, b64: str) -> dict:
         raise NotImplementedError(f"{self.name} 백엔드는 vision 미지원")
     '''
@@ -87,8 +150,6 @@ class DummyAnalyzer(Analyzer):
     name = "dummy"
 
     def analyze(self, text: str) -> dict:
-        # main.py 의 휴리스틱과 겹치지 않게, 여기선 '고정 안전값'만 준다.
-        # 실제 감정 추정은 호출부(main)가 heuristic 으로 보강/대체
         return {
             "pos": 12, "calm": 20, "ten": 8, "sad": 6, "emp": 6,
             "dominant": "calm",
@@ -97,13 +158,12 @@ class DummyAnalyzer(Analyzer):
             "diary": {"emotions": [{"label": "calm", "pct": 100}], "primary": "calm"},
             "_dummy": True,
         }
-    
+
     def generate(self, system: str, user: str) -> str:
-        # 더미 답장 — 실제 문구는 main 이 상황(context/위기)에 맞게 대체 가능.
         return "그 마음 충분히 그럴 수 있어. 오늘은 작은 한 걸음만 같이 떠올려보자."
 
 
-# 2) VllmAnalyzer — providers로 얻은 OpenAI 호환 서버 호출
+# ── 2) VllmAnalyzer — OpenAI 호환 서버 ────────────────────────
 class VllmAnalyzer(Analyzer):
     name = "vllm"
 
@@ -115,9 +175,7 @@ class VllmAnalyzer(Analyzer):
         self._client = None  # 지연 생성
 
         if not settings.VLLM_MODEL:
-            raise RuntimeError(
-                "VLLM_MODEL 이 비어 있습니다. 서빙 중인 모델명을 넣으세요 "
-            )
+            raise RuntimeError("VLLM_MODEL 이 비어 있습니다. 서빙 중인 모델명을 넣으세요.")
         self._model = settings.VLLM_MODEL
 
     def _get_client(self):
@@ -155,6 +213,7 @@ class VllmAnalyzer(Analyzer):
             temperature=settings.GEN_TEMPERATURE,
         )
         return resp.choices[0].message.content or ""
+
 ''' 멀티 모달로 확장
     def analyze_image(self, mime: str, b64: str) -> dict:
         """vLLM 이 VLM(멀티모달)로 떠 있을 때만 동작.
@@ -186,11 +245,8 @@ class VllmAnalyzer(Analyzer):
         return json.loads(_strip_code_fence(content))
 '''
 
-# ─────────────────────────────────────────────────────────────
-# 3) GeminiAnalyzer — 외부 api 호출
-#    chat.completions 가 아니라 messages 라 별도 처리.
-# ─────────────────────────────────────────────────────────────
-class GeminiAnalyzer(Analyzer):
+# ── 3) GeminiAnalyzer — google-genai (client.models.generate_content) ──
+class GeminiAnalyzer(_LLMAnalyzer):
     name = "gemini"
 
     def __init__(self) -> None:
@@ -203,43 +259,83 @@ class GeminiAnalyzer(Analyzer):
         if self._client is None:
             try:
                 from google import genai
+                from google.genai import types
+            except ImportError as e:
+                raise RuntimeError("google-genai SDK 미설치 — `pip install google-genai`") from e
+            self._client = genai.Client(
+                api_key=settings.GEMINI_API_KEY,
+                http_options=types.HttpOptions(timeout=int(settings.REQUEST_TIMEOUT * 1000)),  # ms
+            )
+        return self._client
+
+    def _complete(self, *, system, user, max_tokens, temperature, json_mode, schema=None) -> str:
+        from google.genai import types
+        client = self._get_client()
+
+        cfg = types.GenerateContentConfig(
+            system_instruction=system,
+            temperature=temperature,
+            max_output_tokens=max_tokens,
+            response_mime_type="application/json" if json_mode else "text/plain",
+            response_schema=schema if json_mode else None,
+            thinking_config=types.ThinkingConfig(thinking_level="low"),   # ← 반드시 중첩 (flat 금지)
+        )
+
+        last = None
+        for attempt in range(4):
+            try:
+                resp = client.models.generate_content(model=self._model, contents=user, config=cfg)
+                return resp.text or ""
+            except Exception as e:
+                last = e
+                s = str(e)
+                if any(k in s for k in ("503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "overload")):
+                    time.sleep(1.5 * (attempt + 1))  # 지수 백오프
+                    continue
+                raise
+        raise last
+
+# ── 4) ClaudeAnalyzer — anthropic (client.messages.create) ────
+class ClaudeAnalyzer(_LLMAnalyzer):
+    name = "claude"
+
+    def __init__(self) -> None:
+        if not settings.ANTHROPIC_API_KEY:
+            raise RuntimeError("ANTHROPIC_API_KEY 가 비어 있습니다.")
+        self._client = None
+        self._model = settings.CLAUDE_MODEL
+
+    def _get_client(self):
+        if self._client is None:
+            try:
+                import anthropic
             except ImportError as e:
                 raise RuntimeError("anthropic SDK 미설치 — `pip install anthropic`") from e
-            self._client = genai.Client.interactions.create(
-                model="gemini-3.5-flash",
-                api_key=settings.GEMINI_API_KEY,
+            self._client = anthropic.Anthropic(
+                api_key=settings.ANTHROPIC_API_KEY,
                 timeout=settings.REQUEST_TIMEOUT,
             )
         return self._client
 
-    def _messages(self, system: str, user: str, max_tokens: int) -> str:
+    def _complete(self, *, system, user, max_tokens, temperature, json_mode, schema=None) -> str:
         client = self._get_client()
+        # Claude엔 json_object 강제 옵션이 없어 system 지시로 JSON 유도(+ _strip_code_fence 방어).
+        sys_prompt = system + ("\n반드시 순수 JSON만 출력. 코드펜스·설명 금지." if json_mode else "")
         msg = client.messages.create(
-            model=self._model,
+            model=self._model, 
             max_tokens=max_tokens,
-            system=system,
+            temperature=temperature, 
+            system=sys_prompt,
             messages=[{"role": "user", "content": user}],
         )
-        return "".join(getattr(b, "text", "") for b in msg.content)
-    
-    def analyze(self, text: str) -> dict:
-        raw = self._messages(
-            system="너는 JSON만 출력하는 감정 분석기다. 코드펜스 없이 순수 JSON만.",
-            user=PROMPT_ANALYZE.format(text=text),
-            max_tokens=800,
-        )
-        return json.loads(_strip_code_fence(raw))
+        return "".join(getattr(b, "text", "") for b in msg.content if getattr(b, "type", "") == "text")
 
-    def generate(self, system: str, user: str) -> str:
-        return self._messages(system=system, user=user, max_tokens=400)
 
-# ─────────────────────────────────────────────────────────────
-# 팩토리 — ANALYZER_BACKEND 를 보고 analyzer 를 '지연 생성'
-#  생성 실패(키/URL 누락 등) 시 FALLBACK_TO_DUMMY 면 Dummy 로.
-# ─────────────────────────────────────────────────────────────
+# ── 팩토리 ────────────────────────────────────────────────────
 _REGISTRY: dict[str, type[Analyzer]] = {
     "vllm": VllmAnalyzer,
     "gemini": GeminiAnalyzer,
+    "claude": ClaudeAnalyzer,
     "dummy": DummyAnalyzer,
 }
 
@@ -265,7 +361,6 @@ def build_analyzer(backend: Optional[str] = None) -> Analyzer:
     key = (backend or settings.ANALYZER_BACKEND).lower()
     if key in _CACHE:
         return _CACHE[key]
-
     try:
         analyzer = _create(key)
     except Exception as e:
@@ -274,7 +369,6 @@ def build_analyzer(backend: Optional[str] = None) -> Analyzer:
             analyzer = DummyAnalyzer()
         else:
             raise
-
     _CACHE[key] = analyzer
     return analyzer
 

@@ -35,14 +35,6 @@ from analyzers import (
     build_analyzer,
 )
 
-# backend/.env 자동 로드 (python-dotenv 없으면 무시)
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-except ImportError:
-    pass
-
 app = FastAPI(title="Innerverse AI Backend", version="0.1.0")
 
 # 🚨 CORS — 배포 시 CORS_ORIGINS 를 실제 프론트 도메인으로 좁힐 것 (config.py)
@@ -98,7 +90,6 @@ class AnalyzeResponse(BaseModel):
     keywords: list[str]
     crisis_score: float = Field(0.0, ge=0.0, le=1.0)
     diary: DiaryResult  # 앱 일기 화면용 7라벨 결과
-
 
 class MomoReplyRequest(BaseModel):
     text: str
@@ -422,6 +413,8 @@ def get_analyzer() -> Analyzer:
             _analyzer = build_analyzer()
         except Exception as e:
             print(f"[main] 분석기 초기화 실패({e}) → dummy 로 폴백")
+            from analyzers import DummyAnalyzer
+            _analyzer = DummyAnalyzer()
     print(f"[main] 분석기 로드: {_analyzer.name}")
     return _analyzer
 
