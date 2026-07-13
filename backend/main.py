@@ -715,18 +715,19 @@ async def weekly_review(uid: str):
 
 
 @app.post("/api/insights")
-async def insights(extracted_text: str = Form(...)):
-    # end of Phase 0 stubs
-    # 분석 단계: 텍스트를 분석기에 전달하고 결과를 받는다.
+async def insights(extracted_text: str = Form("")):
+    """텍스트 → 분석기 결과(감정·관계) 반환.
+    Phase 5 목표는 집계·차분 프라이버시 기반 B2B 인사이트(개인 식별 불가)이며, 현재는
+    단일 텍스트 분석 결과를 그대로 내려주는 단계.
+    """
+    # 1. 분석: 텍스트를 분석기에 전달하고 결과(색 후처리 포함)를 받는다.
+    analysis = await _run_analysis(extracted_text or "")
 
-    analysis = await _run_analysis(extracted_text)
-    """집계·차분 프라이버시 적용 B2B 인사이트 (Phase 5). 개인 식별 불가. 현재는 스텁.
-    return {"status": "not_implemented", "phase": 5}
-"""
-    # 3. 프론트엔드로 분석 결과 (JSON) 반환
+    # 2. 프론트엔드로 분석 결과(JSON) 반환.
+    #    dummy 백엔드는 raw 형태(emotions/relationships 없음)를 주므로 .get 으로 방어.
     return {
-            "status": "success",
-            "extracted_text": extracted_text,
-            "emotions": analysis["emotions"],
-            "relationships": analysis["relationships"],
-        }
+        "status": "success",
+        "extracted_text": extracted_text or "",
+        "emotions": analysis.get("emotions", []),
+        "relationships": analysis.get("relationships", []),
+    }

@@ -202,11 +202,12 @@ class GeminiAnalyzer(Analyzer):
     def _get_client(self):
         if self._client is None:
             try:
-                import anthropic
+                from google import genai
             except ImportError as e:
                 raise RuntimeError("anthropic SDK 미설치 — `pip install anthropic`") from e
-            self._client = anthropic.Anthropic(
-                api_key=settings.ANTHROPIC_API_KEY,
+            self._client = genai.Client.interactions.create(
+                model="gemini-3.5-flash",
+                api_key=settings.GEMINI_API_KEY,
                 timeout=settings.REQUEST_TIMEOUT,
             )
         return self._client
