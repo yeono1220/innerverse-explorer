@@ -187,17 +187,17 @@ class VllmAnalyzer(Analyzer):
 '''
 
 # ─────────────────────────────────────────────────────────────
-# 3) ClaudeAnalyzer — Anthropic SDK (messages)
+# 3) GeminiAnalyzer — 외부 api 호출
 #    chat.completions 가 아니라 messages 라 별도 처리.
 # ─────────────────────────────────────────────────────────────
-class ClaudeAnalyzer(Analyzer):
-    name = "claude"
+class GeminiAnalyzer(Analyzer):
+    name = "gemini"
 
     def __init__(self) -> None:
-        if not settings.ANTHROPIC_API_KEY:
-            raise RuntimeError("ANTHROPIC_API_KEY 가 비어 있습니다.")
+        if not settings.GEMINI_API_KEY:
+            raise RuntimeError("GEMINI_API_KEY 가 비어 있습니다.")
         self._client = None
-        self._model = settings.CLAUDE_MODEL
+        self._model = settings.GEMINI_MODEL
 
     def _get_client(self):
         if self._client is None:
@@ -238,7 +238,7 @@ class ClaudeAnalyzer(Analyzer):
 # ─────────────────────────────────────────────────────────────
 _REGISTRY: dict[str, type[Analyzer]] = {
     "vllm": VllmAnalyzer,
-    "claude": ClaudeAnalyzer,
+    "gemini": GeminiAnalyzer,
     "dummy": DummyAnalyzer,
 }
 

@@ -8,7 +8,7 @@ API 계약 = BACKEND_AI_PLAN.md 3절. 응답 규격은 프론트 `src/store/emot
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 토글 구조 (2축 독립) — config.py / providers.py / analyzers.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  축 1) ANALYZER_BACKEND : vllm | claude | dummy   ('무엇으로' 분석)
+  축 1) ANALYZER_BACKEND : vllm | gemini | dummy   ('무엇으로' 분석)
   축 2) VLLM_PROVIDER    : modal | runpod | custom ('어디에' 서빙, vllm 일 때만)
 
   main.py 는 analyzers.build_analyzer() 로 얻은 analyzer 만 호출한다.

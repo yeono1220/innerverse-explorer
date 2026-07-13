@@ -3,7 +3,7 @@
 
 ┌─ 축 1: ANALYZER_BACKEND ── '무엇으로' 분석하는가 ──────────────┐
 │   vllm   : 직접 서빙하는 오픈 모델(OpenAI 호환)로 분석            │
-│   claude : Anthropic Claude API 로 분석                    │
+│   gemini : Google Gemini API 로 분석                    │
 │   dummy  : 외부 호출 없이 고정 결과 (기본값)                     │
 └───────────────────────────────────────────────────────────┘
 
@@ -13,11 +13,11 @@
 │   custom : 직접 URL 지정 (로컬/Colab/기타)                    │
 │                                                          │
 │   ※ 이 축은 ANALYZER_BACKEND=vllm 일 때만 의미가 있다.         │
-│     claude/dummy 를 쓰면 이 값은 무시된다.                     │
+│     gemini/dummy 를 쓰면 이 값은 무시된다.                     │
 └──────────────────────────────────────────────────────────┘
 
 전환 예시 (코드 수정 없이 환경변수만):
-    ANALYZER_BACKEND=claude                          # Claude 사용
+    ANALYZER_BACKEND=gemini                          # Gemini 사용
     ANALYZER_BACKEND=vllm  VLLM_PROVIDER=modal       # Modal 위 vLLM
     ANALYZER_BACKEND=vllm  VLLM_PROVIDER=runpod      # RunPod 위 vLLM
 """
@@ -49,9 +49,9 @@ class Settings:
     RUNPOD_VLLM_URL: str = os.getenv("RUNPOD_VLLM_URL", "")
     RUNPOD_API_KEY: str = os.getenv("RUNPOD_API_KEY", "")
 
-    # ── Claude 설정 ──
-    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
-    CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-5")
+    # ── Gemini 설정 ──
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-pro")
 
     # ── 텍스트 생성(모모 답장 등) 온도 ──
     GEN_TEMPERATURE: float = float(os.getenv("GEN_TEMPERATURE", "0.6"))

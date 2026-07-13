@@ -77,8 +77,8 @@ Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/c
 ```bash
 pip install -r requirements.txt      # 쓰는 조합의 SDK 만 있어도 됨
 
-# 조합 A) Claude
-ANALYZER_BACKEND=claude ANTHROPIC_API_KEY=sk-ant-... uvicorn main:app
+# 조합 A) Gemini
+ANALYZER_BACKEND=gemini ANTHROPIC_API_KEY=... uvicorn main:app
 
 # 조합 B) Modal 위 vLLM
 #   1) 먼저 vLLM 서버 배포:  modal deploy modal_vllm_server.py
@@ -106,7 +106,7 @@ uvicorn main:app
 
 ## Fail-safe
 
-- **지연 초기화**: 쓰는 조합의 클라이언트만 만듭니다. Claude 를 쓰면
+- **지연 초기화**: 쓰는 조합의 클라이언트만 만듭니다. Gemini 를 쓰면
   vLLM/provider 는 조회조차 안 됩니다(불필요한 연결·에러 없음).
 - 폴백: 설정 누락·초기화 실패 시 서버가 죽지 않고 `dummy` 로 떨어집니다
   (`FALLBACK_TO_DUMMY=false` 로 끌 수 있음).
@@ -117,5 +117,5 @@ uvicorn main:app
 
 ## TODO
 - 음성(STT): 현재 오디오는 임시 저장 후 고정 문자열을 씁니다.
-  Whisper 로 텍스트 변환을 붙여야 vLLM/Claude 에 넘길 입력이 생깁니다.
+  Whisper 로 텍스트 변환을 붙여야 vLLM/Gemini 에 넘길 입력이 생깁니다.
 - 프론트 연동: `/api/analyze` 를 `fetch` 로 호출해 store 에 반영하는 코드는 별도.

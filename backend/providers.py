@@ -11,7 +11,7 @@ Provider 계층 — 축 2: vLLM 서버가 '어디에' 있는지 해결한다.
 
 주의:
     이 레이어는 ANALYZER_BACKEND=vllm 일 때만 호출된다.
-    claude/dummy 를 쓰면 provider 는 아예 접근되지 않는다
+    gemini/dummy 를 쓰면 provider 는 아예 접근되지 않는다
 """
 from __future__ import annotations
 

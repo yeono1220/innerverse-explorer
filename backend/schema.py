@@ -1,14 +1,14 @@
 """
 감정 분석 결과의 '공통 계약(contract)'.
 
-어떤 분석기(vLLM / Claude / dummy)가 오든, 또 vLLM 이 어느 provider
+어떤 분석기(vLLM / Claude(Gemini) / dummy)가 오든, 또 vLLM 이 어느 provider
 에서 돌든, 최종적으로 프론트엔드로 내려가는 JSON 은
 항상 이 형태 → 프론트(Zustand store)가 백엔드 조합과 무관하게 동작.
 
 원칙 2가지:
   1. 감정 라벨 → 색상 매핑은 여기서 '고정'. LLM 이 색을 만들지 않는다.
      LLM 은 label + value 만 만들고, 색은 서버가 채운다(attach_colors).
-  2. LLM 에 강제할 JSON 스키마도 여기서 정의해 vLLM/Claude 가 공유한다.
+  2. LLM 에 강제할 JSON 스키마도 여기서 정의해 vLLM/Claude(Gemini) 가 공유한다.
 """
 
 # 프론트 디자인에서 정한 감정 5종과 고정 색상
@@ -66,7 +66,7 @@ def attach_colors(analysis: dict) -> dict:
     return analysis
 
 
-# vLLM / Claude 공용 시스템 지시문
+# vLLM / Claude(Gemini) 공용 시스템 지시문
 SYSTEM_PROMPT = (
     "너는 사용자의 일기 텍스트에서 감정과 인간관계를 분석하는 엔진이다.\n"
     f"감정은 반드시 다음 5종만 사용한다: {', '.join(EMOTION_LABELS)}.\n"

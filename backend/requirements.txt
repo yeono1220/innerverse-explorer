@@ -7,4 +7,3 @@ pydantic>=2.6
 openai>=1.30
 supabase>=2.4
 python-dotenv>=1.0
-anthropic>=0.39   # (선택) Claude — PPT 아키텍처 일치용
