@@ -61,8 +61,8 @@ class Settings:
 
     # ── Gemini 설정 ──
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    # 테스트 시 ai studio 에서 제공하는 모델 중 3.5 선택. 실제 배포 시 수정
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+    # 테스트 시 ai studio 에서 제공하는 모델 중 최신 모델 선택. 실제 배포 시 수정
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 
     # ── Claude(Anthropic) 설정 ──
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")

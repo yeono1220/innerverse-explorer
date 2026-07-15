@@ -37,3 +37,5 @@ venv/
 
 #test files
 backend/Test/
+
+GUIDE_MARKDOWN/
