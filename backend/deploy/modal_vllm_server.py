@@ -21,7 +21,7 @@ vLLM 서버를 Modal 에 배포한다.
          ANALYZER_BACKEND=vllm
          VLLM_PROVIDER=modal
          MODAL_VLLM_URL=https://<you>--innerverse-vllm-serve.modal.run
-         VLLM_MODEL=         # ← 아래 MODEL 과 반드시 일치
+         VLLM_MODEL=Qwen3-8B         # ← 아래 MODEL 과 반드시 일치
      (providers.ModalProvider 가 뒤에 /v1 을 자동으로 붙인다)
 
   로컬 빠른 확인:  modal serve modal_vllm_server.py   # 임시 URL 로 라이브 테스트
@@ -37,7 +37,7 @@ import modal
 
 # ── 튜닝 포인트 ───────────────────────────────────────────────────────────────
 # 서빙할 모델. backend 의 VLLM_MODEL 과 동일해야 한다.
-MODEL = os.environ.get("VLLM_MODEL", "Qwen/Qwen2.5-7B-Instruct") # 예시이므로 수정 필요
+MODEL = os.environ.get("VLLM_MODEL", "Qwen/Qwen3-8B")
 # GPU 타입. 7B 급은 L4/A10G 로 충분. 더 큰 모델이면 "A100" 등으로.
 GPU = os.environ.get("VLLM_GPU", "L4")
 # 동시 요청 여유. vLLM 이 배칭하므로 1 컨테이너가 여러 요청 처리 가능.
@@ -54,7 +54,8 @@ VLLM_PORT = 8000
 # vLLM + FastAPI 서버가 들어간 이미지. 버전은 필요에 맞게 올려도 됨.
 vllm_image = (
     modal.Image.debian_slim(python_version="3.12")
-    .pip_install("vllm==0.6.3", "huggingface_hub[hf_transfer]==0.26.2")
+    # .pip_install("vllm==0.6.3", "huggingface_hub[hf_transfer]==0.26.2") # Qwen3-8B 로드를 위해 vllm 버전 수정 필요
+    .pip_install("vllm==0.9.1", "huggingface_hub[hf_transfer]")
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})  # 모델 다운로드 가속
 )
 
@@ -62,7 +63,7 @@ vllm_image = (
 hf_cache = modal.Volume.from_name("innerverse-hf-cache", create_if_missing=True)
 
 app = modal.App("innerverse-vllm")
-
+'''
 # 게이트(승인 필요) 모델을 위한 HF 토큰 시크릿. 공개 모델이면 없어도 됨.
 _secrets = []
 try:
@@ -70,13 +71,13 @@ try:
 except Exception:
     # 시크릿 미등록이면 무시(공개 모델 가정)
     pass
-
+'''
 
 @app.function(
     image=vllm_image,
     gpu=GPU,
     volumes={"/root/.cache/huggingface": hf_cache},
-    secrets=_secrets,
+    # secrets=_secrets,
     timeout=60 * 60,             # 긴 배치/다운로드 대비
     scaledown_window=SCALEDOWN_WINDOW,
 )
@@ -92,13 +93,17 @@ def serve():
         "--host", "0.0.0.0",
         "--port", str(VLLM_PORT),
         # 컨텍스트 길이는 모델/GPU 메모리에 맞춰 조정
-        "--max-model-len", os.environ.get("VLLM_MAX_MODEL_LEN", "8192"),
+        # "--max-model-len", os.environ.get("VLLM_MAX_MODEL_LEN", "8192"),
+        "--max-model-len", os.environ.get("VLLM_MAX_MODEL_LEN", "16384"),
+        # Qwen3-8B에서 사고과정/답변생성 분리
+        "--reasoning-parser qwen3"
     ]
     if API_KEY:
         cmd += ["--api-key", API_KEY]
 
     print("[modal_vllm] 실행:", " ".join(cmd))
-    subprocess.Popen(" ".join(cmd), shell=True)
+    # subprocess.Popen(" ".join(cmd), shell=True)
+    subprocess.Popen(" ".join(cmd), shell=False)
 
 # ── 배포 후 헬스체크용 로컬 진입점 ──
 # 사용:  modal run modal_vllm_server.py            # 모델 목록 확인

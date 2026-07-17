@@ -1,52 +1,21 @@
-// 01 · 로그인 (카카오/이메일)
+// 01 · 로그인 (카카오/이메일) — 화면(표현) 전용. 로직은 ./useLoginActions.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { StatusBar } from "../ui/layout";
 import { Button } from "../ui/primitives";
 import { Planet2D } from "../ui/planet";
-import { useUserStore } from "@/store/userStore";
-import { signInWithPassword } from "@/services/auth";
-import { isSupabaseConfigured } from "@/lib/supabase";
+import { useLoginActions } from "./useLoginActions";
 
 export default function Login() {
   const nav = useNavigate();
-  const login = useUserStore((s) => s.login);
-  const name = useUserStore((s) => s.name);
+  const { busy, error, loginWithKakao, loginWithEmail } = useLoginActions();
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [mode, setMode] = useState<"choose" | "email">("choose");
-  const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
-  const onKakao = () => nav("/signup");
-
-  const onEmailSubmit = async (e: React.FormEvent) => {
+  const onEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
-
-    // 목업 모드 (Supabase 미설정)
-    if (!isSupabaseConfigured) {
-      login(name || email.split("@")[0], email);
-      nav("/home", { replace: true });
-      return;
-    }
-    setBusy(true);
-    setErr(null);
-    try {
-      await signInWithPassword(email.trim(), pw);
-      nav("/home", { replace: true });
-    } catch (e) {
-      const msg = (e as Error)?.message || "";
-      // Supabase 서버 미연결(네트워크/미배포) → 데모 모드로 폴백
-      if (/fetch|network|failed|load/i.test(msg)) {
-        login(name || email.split("@")[0], email);
-        nav("/home", { replace: true });
-        return;
-      }
-      setErr("로그인 실패 — 이메일/비밀번호를 확인하거나 회원가입해 주세요.");
-    } finally {
-      setBusy(false);
-    }
+    loginWithEmail(email, pw);
   };
 
   return (
@@ -68,7 +37,7 @@ export default function Login() {
         <div style={{ marginTop: "auto", width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
           {mode === "choose" ? (
             <>
-              <Button block onClick={onKakao} style={{ background: "#FEE500", color: "#181600" }}>
+              <Button block onClick={loginWithKakao} disabled={busy} style={{ background: "#FEE500", color: "#181600" }}>
                 💬 카카오로 3초 만에 시작
               </Button>
               <Button block variant="ghost" onClick={() => setMode("email")}>
@@ -81,6 +50,7 @@ export default function Login() {
               >
                 처음이신가요? 회원가입 →
               </button>
+              {error && <p style={{ fontSize: 12, color: "#e8744e" }}>{error}</p>}
               <p style={{ fontSize: 11, color: "var(--iv-txt3)", marginTop: 4 }}>
                 계속하면 이용약관과 개인정보처리방침에 동의합니다.
               </p>
@@ -102,7 +72,7 @@ export default function Login() {
                 value={pw}
                 onChange={(e) => setPw(e.target.value)}
               />
-              {err && <p style={{ fontSize: 12, color: "#e8744e" }}>{err}</p>}
+              {error && <p style={{ fontSize: 12, color: "#e8744e" }}>{error}</p>}
               <Button block type="submit" disabled={busy}>
                 {busy ? "로그인 중…" : "로그인"}
               </Button>
