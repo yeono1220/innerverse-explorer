@@ -8,10 +8,10 @@
     7) tpot (time per output token)  8) actual e2e latency
     9) system tps
 
-수집 방식 (A안):
+수집 방식 :
     - 요청별 정밀 지표(ttft/tpot/e2e/토큰/req tps)는 vLLM 을 '스트리밍'으로 호출하며 직접 측정.
       (프론트 API 계약은 그대로 — 백엔드가 스트림을 다 받아 완성 텍스트를 반환)
-    - 서버 전역 지표(concurrency/active seq/queue/kv%/system tps)는 vLLM 의 Prometheus
+    - 서버 전역 지표(concurrency/active seq/queue/kv cache 점유율/system tps)는 vLLM 의 Prometheus
       /metrics 엔드포인트를 스냅샷해서 붙인다.
     → 두 출처를 한 줄에 합쳐 기록하므로 "그 순간 서버 부하 ↔ 내 요청 지연" 을 상관지을 수 있다.
 
