@@ -4,7 +4,8 @@ INNERVERSE 2.0 — AI Backend (FastAPI)
 API 계약 = BACKEND_AI_PLAN.md 3절. 응답 규격은 프론트 `src/store/emotionStore.ts`
 및 `src/lib/api-types.ts`와 1:1로 맞춰야 한다.
 
-5감정 키(pos/calm/ten/sad/emp)는 프론트·백·DB 전부에서 불변. (행성 색 블렌딩이 묶임)
+감정 축은 7종(기쁨/차분/사랑/슬픔/분노/긴장/공허)이 유일. schema.py 가 단일 소스.
+행성 분기 7종(bloom/calm/love/wither/rage/tense/void)은 감정에서 1:1 파생(schema.branch_of).
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 토글 구조 (2축 독립) — config.py / providers.py / analyzers.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -31,7 +32,7 @@ from providers import build_provider
 from analyzers import (
     PROMPT_MOMO_SYSTEM,
     Analyzer,
-    active_backend_name,
+#    active_backend_name,
     build_analyzer,
 )
 
@@ -39,7 +40,7 @@ app = FastAPI(title="Innerverse AI Backend", version="0.1.0")
 
 # 🚨 CORS — 배포 시 CORS_ORIGINS 를 실제 프론트 도메인으로 좁힐 것 (config.py)
 from config import settings
-from schema import attach_colors
+from schema import attach_colors, branch_of, BRANCHES, EMOTION_LABELS
 
 app.add_middleware(
     CORSMiddleware,
@@ -52,16 +53,19 @@ app.add_middleware(
 # ─────────────────────────────────────────────────────────────────────────────
 # 공통 타입
 # ─────────────────────────────────────────────────────────────────────────────
-EmoKey = Literal["pos", "calm", "ten", "sad", "emp"]
-Dominant = Literal["bloom", "calm", "tense", "wither", "void"]
+# 행성 분기 7종 — schema.BRANCHES 와 1:1 (감정 primary 에서 파생)
+Dominant = Literal["bloom", "calm", "love", "wither", "rage", "tense", "void"]
 
 
 class EmotionScores(BaseModel):
-    pos: int = Field(0, ge=0, le=100)  # 고양 Elated
-    calm: int = Field(0, ge=0, le=100)  # 평온 Serene
-    ten: int = Field(0, ge=0, le=100)  # 긴장 Tense
-    sad: int = Field(0, ge=0, le=100)  # 격앙 Agitated
-    emp: int = Field(0, ge=0, le=100)  # 침체 Depressed
+    # 7감정 비중(선택 입력). 슬러그 키 = 프론트 Emo7 과 1:1.
+    joy: int = Field(0, ge=0, le=100)      # 기쁨
+    calm: int = Field(0, ge=0, le=100)     # 차분
+    love: int = Field(0, ge=0, le=100)     # 사랑
+    sad: int = Field(0, ge=0, le=100)      # 슬픔
+    anger: int = Field(0, ge=0, le=100)    # 분노
+    tension: int = Field(0, ge=0, le=100)  # 긴장
+    empty: int = Field(0, ge=0, le=100)    # 공허
 
 
 # 일기 화면용 7라벨 (기쁨/차분/사랑/슬픔/분노/긴장/공허) — 프론트 diaryStore.EmotionLabel 과 1:1
@@ -81,15 +85,10 @@ class DiaryResult(BaseModel):
 class AnalyzeResponse(BaseModel):
     status: str = "success"
     extracted_text: str
-    pos: int
-    calm: int
-    ten: int
-    sad: int
-    emp: int
-    dominant: Dominant
+    dominant: Dominant                 # 행성 분기(7종) — diary.primary 에서 파생
     keywords: list[str]
     crisis_score: float = Field(0.0, ge=0.0, le=1.0)
-    diary: DiaryResult  # 앱 일기 화면용 7라벨 결과
+    diary: DiaryResult  # 앱 일기 화면용 7감정 결과 (단일 소스)
 
 class MomoReplyRequest(BaseModel):
     text: str
@@ -97,6 +96,7 @@ class MomoReplyRequest(BaseModel):
     history: list[str] = Field(default_factory=list)
     context: list[str] = Field(default_factory=list)  # RAG: 검색된 과거 일기 스니펫
     profile: str = ""  # ③④ 사실·성향 요약 (항상 주입되는 장기기억)
+    isLinkAgreed : bool = False # 전문가 연계는 사용자가 동의 하에 진행
 
 
 class EmbedRequest(BaseModel):
@@ -161,7 +161,7 @@ class CrisisCheckResponse(BaseModel):
 class VisionResponse(BaseModel):
     labels: list[str]
     scene: str
-    emotion_hint: Optional[Dominant] = None
+    emotion_hint: Optional[str] = None   # 7감정 라벨 중 하나 또는 None
 
 
 class WeeklyReviewResponse(BaseModel):
@@ -171,46 +171,34 @@ class WeeklyReviewResponse(BaseModel):
     recommendations: list[str]
 
 
+# diary Message draft test
+class MomoDiaryMessage(BaseModel):
+    who: Optional[str] = None
+    when : Optional[str] = None
+    how : Optional[str] = None
+    what : Optional[str] = None
+    where : Optional[str] = None
+    why : Optional[str] = None
+    text : Optional[str] = "" # 육하원칙 분석 실패시 text 뭉치로 반환
+    role : Optional[str] = None # 사용자(id)
+    content : Optional[str] = None # 텍스트 외의 데이터(음성, 사진)
+
+class MomoDiaryRequest(BaseModel):
+    messages: list[MomoDiaryMessage] = Field(default_factory=list)
+
+class MomoDiaryResponse(BaseModel):
+    diary:str
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 휴리스틱 (외부 백엔드 실패/미설정 시 폴백) — 계약을 항상 성립시키는 안전망
 # ─────────────────────────────────────────────────────────────────────────────
-def decide_dominant(e: dict[str, float]) -> Dominant:
-    """프론트 constants.ts decideBranch 와 동일 로직 (포팅). dominant 라벨 일치 보장."""
-    positivity = e["pos"] + e["calm"]
-    total = positivity + e["ten"] + e["sad"] + e["emp"] + 0.001
-    r_pos = positivity / total
-    r_ten = e["ten"] / total
-    r_sad = e["sad"] / total
-    r_emp = e["emp"] / total
-    if r_emp > 0.38:
-        return "void"
-    if r_sad > 0.34:
-        return "wither"
-    if r_ten > 0.34:
-        return "tense"
-    if r_pos > 0.5 and total > 55:
-        return "bloom"
-    return "calm"
+def dominant_of(primary: str | None) -> Dominant:
+    """대표 감정(primary) → 행성 분기(7종). schema.branch_of 단일 소스.
+    반환값은 항상 BRANCHES(7) 중 하나이므로 Dominant 로 유효."""
+    return branch_of(primary)  # type: ignore[return-value]
 
 
-# 아주 단순한 키워드 휴리스틱 (실서비스 아님 — 데모/계약 검증용)
-_LEXICON: dict[EmoKey, tuple[str, ...]] = {
-    "pos": ("행복", "기뻐", "신나", "설레", "좋았", "최고", "뿌듯", "사랑"),
-    "calm": ("평온", "편안", "안정", "괜찮", "고요", "차분", "휴식", "쉬었"),
-    "ten": ("긴장", "불안", "초조", "걱정", "조마", "떨려", "마감", "시험"),
-    "sad": ("화가", "분노", "짜증", "억울", "열받", "싫어", "답답"),
-    "emp": ("우울", "지쳐", "무기력", "외로", "공허", "슬퍼", "포기", "힘들"),
-}
 _CRISIS_TERMS = ("자해", "자살", "죽고", "죽고싶", "사라지고", "없어지고", "끝내고")
-
-
-def heuristic_emotions(text: str) -> EmotionScores:
-    scores = {"pos": 12, "calm": 10, "ten": 8, "sad": 6, "emp": 6}
-    for key, terms in _LEXICON.items():
-        for t in terms:
-            if t in text:
-                scores[key] += 22  # type: ignore[index]
-    return EmotionScores(**{k: max(0, min(100, v)) for k, v in scores.items()})
 
 
 def heuristic_crisis(text: str) -> float:
@@ -219,8 +207,15 @@ def heuristic_crisis(text: str) -> float:
 
 
 def heuristic_keywords(text: str) -> list[str]:
-    found = [t for terms in _LEXICON.values() for t in terms if t in text]
-    return (found[:3]) or ["기록"]
+    """7감정 규칙(_DIARY_RULES)에서 매칭된 표현을 키워드로 (실서비스 아님 — 데모/폴백용)."""
+    import re
+
+    found: list[str] = []
+    for _label, pat in _DIARY_RULES:
+        for m in re.findall(pat, text):
+            if m and m not in found:
+                found.append(m)
+    return found[:3] or ["기록"]
 
 
 # 7라벨 휴리스틱 (프론트 DiaryWrite.analyze 규칙 포팅) — LLM 실패 시 폴백_
@@ -274,18 +269,15 @@ def normalize_diary(raw: dict, text: str) -> DiaryResult:
 
 
 def _analyze_from_data(data: dict, text: str) -> AnalyzeResponse:
-    """analyzer 가 준 JSON dict → AnalyzeResponse (검증·클램프·폴백 포함)."""
-    emo = {k: max(0, min(100, int(data.get(k, 0) or 0))) for k in ("pos", "calm", "ten", "sad", "emp")}
-    dominant = data.get("dominant")
-    if dominant not in ("bloom", "calm", "tense", "wither", "void"):
-        dominant = decide_dominant({k: float(v) for k, v in emo.items()})
+    """analyzer 가 준 7감정 JSON dict → AnalyzeResponse (검증·클램프·폴백 포함).
+    감정/대표감정은 diary(7)로 통일하고, 행성 분기(dominant)는 primary 에서 파생한다.
+    (emotions/primary 는 최상위 키 — 7감정 계약)"""
+    diary = normalize_diary(data, text)
     keywords = [str(k) for k in (data.get("keywords") or [])][:3] or ["기록"]
     crisis = float(data.get("crisis_score", 0.0) or 0.0)
-    diary = normalize_diary(data.get("diary"), text)
     return AnalyzeResponse(
         extracted_text=text,
-        pos=emo["pos"], calm=emo["calm"], ten=emo["ten"], sad=emo["sad"], emp=emo["emp"],
-        dominant=dominant,
+        dominant=dominant_of(diary.primary),
         keywords=keywords,
         crisis_score=max(0.0, min(1.0, crisis)),
         diary=diary,
@@ -373,15 +365,14 @@ def embed_text(text: str) -> Optional[list[float]]:
         return None
 
 def _heuristic_analyze(text: str) -> AnalyzeResponse:
-    """완전 폴백 — 외부 백엔드 없이 계약을 성립시킨다."""
-    emo = heuristic_emotions(text)
+    """완전 폴백 — 외부 백엔드 없이 계약을 성립시킨다 (7감정)."""
+    diary = heuristic_diary(text)
     return AnalyzeResponse(
         extracted_text=text,
-        pos=emo.pos, calm=emo.calm, ten=emo.ten, sad=emo.sad, emp=emo.emp,
-        dominant=decide_dominant(emo.model_dump()),
+        dominant=dominant_of(diary.primary),
         keywords=heuristic_keywords(text),
         crisis_score=heuristic_crisis(text),
-        diary=heuristic_diary(text),
+        diary=diary,
     )
 
 
@@ -399,9 +390,7 @@ def _gen_text(system: str, user: str) -> Optional[str]:
 # ─────────────────────────────────────────────────────────────────────────────
 # 라우트
 # ─────────────────────────────────────────────────────────────────────────────
-@app.get("/")
-def read_root():
-    return {"message": "Innerverse AI Server is running!", "version": app.version}
+
 # ── 분석기 지연 초기화 ──
 # 시작 시 한 번만 생성해 재사용. 초기화가 실패해도 서버는 뜨게 하고 dummy 로 폴백 → 부분 장애가 전체 다운으로 안 번지게.
 _analyzer: Analyzer | None = None
@@ -412,17 +401,17 @@ def get_analyzer() -> Analyzer:
         try:
             _analyzer = build_analyzer()
         except Exception as e:
-            print(f"[main] 분석기 초기화 실패({e}) → dummy 로 폴백")
+            print(f"[main] Analyzer 초기화 실패({e}) → dummy 로 폴백")
             from analyzers import DummyAnalyzer
             _analyzer = DummyAnalyzer()
-    print(f"[main] 분석기 로드: {_analyzer.name}")
+    print(f"[main] Analyzer Loaded: {_analyzer.name}")
     return _analyzer
 
 @app.get("/")
 def read_root():
     return {"message": "Innerverse AI Server is running!",
             "analyzer": get_analyzer().name}
-
+'''
 @app.get("/health")
 def health():
     a = get_analyzer()
@@ -433,7 +422,7 @@ def health():
         # 축 2 는 vLLM 을 실제로 쓸 때만 의미. 그 외엔 None 으로 표시.
         "vllm_provider": getattr(a, "provider_name", None),
     }
-
+'''
 async def _run_analysis(text: str) -> dict:
     """
     분석기 호출 + 공통 후처리(색상) + 폴백을 한곳에서.
@@ -450,7 +439,7 @@ async def _run_analysis(text: str) -> dict:
             raise
     # 어떤 조합이든 반드시 이 후처리를 거쳐 색을 입힌다.
     return attach_colors(result)
-
+'''
 @app.get("/health")
 def health():
     """진단용 — 현재 두 축 토글과 실제 활성 백엔드(폴백 반영)"""
@@ -464,7 +453,7 @@ def health():
         except Exception as e:
             provider_name = settings.VLLM_PROVIDER
             provider_url = f"(미해결: {e})"
-
+    else : analyzer = get_analyzer()
     return {
         "status": "ok",
         "analyzer_backend": settings.ANALYZER_BACKEND,   # 설정값(축1)
@@ -475,7 +464,26 @@ def health():
         "vllm_model": settings.VLLM_MODEL or None,
         "fallback_to_dummy": settings.FALLBACK_TO_DUMMY,
     }
+'''
+@app.get("/health")
+def health():
+    """진단용 — 현재 두 축 토글과 실제 활성 백엔드(폴백 반영)"""
+    global _analyzer
+    _analyzer = get_analyzer()
+    if _analyzer.name == "vllm":
+        provider_name = _analyzer.name if not _analyzer else "dummy"
+        provider_url = _analyzer.endpoint().base_url if not _analyzer else None
 
+    return {
+        "status": "ok",
+        "analyzer_backend": settings.ANALYZER_BACKEND,   # 설정값
+        "active_analyzer": _analyzer.name,         # 실제 활성(폴백 반영)
+        "vllm_provider": settings.VLLM_PROVIDER,           # 설정값
+        "vllm_provider_resolved": provider_name,
+        "vllm_base_url": provider_url,
+        "vllm_model": settings.VLLM_MODEL or None,
+        "fallback_to_dummy": settings.FALLBACK_TO_DUMMY,
+    }
 
 @app.get("/api/_debug/analyze")
 def debug_analyze(text: str = "오늘은 조금 지치고 불안했지만 그래도 버텼다."):
@@ -494,8 +502,8 @@ async def analyze_diary(
     audio_file: UploadFile | None = File(None),
     text_data: str | None = Form(None),
 ):
-    """일기(text/audio) → 5감정 + dominant + keywords + crisis_score
-    응답 규격 = 프론트 emotionStore / api-types.ts 와 1:1.
+    """일기(text/audio) → 7감정 + dominant + keywords + crisis_score
+    응답 규격 = 프론트 diaryStore(7감정) / lib/api.ts 와 1:1.
     analyzer.analyze() 우선, 실패 시 휴리스틱 폴백."""
     extracted_text = text_data or ""
 
@@ -541,11 +549,14 @@ async def momo_reply(req: MomoReplyRequest):
         parts.append("과거 기록(참고):\n" + "\n".join(f"- {c}" for c in req.context[:3]))
     if req.emotions:
         e = req.emotions
-        parts.append(f"현재 감정비율 pos{e.pos}/calm{e.calm}/ten{e.ten}/sad{e.sad}/emp{e.emp}")
+        parts.append(
+            f"현재 감정비중 기쁨{e.joy}/차분{e.calm}/사랑{e.love}/슬픔{e.sad}/"
+            f"분노{e.anger}/긴장{e.tension}/공허{e.empty}"
+        )
     if req.history:
         parts.append("직전 대화:\n" + "\n".join(req.history[-6:]))
     parts.append(f"사용자: {req.text}")
-    if escalate:
+    if escalate and req.isLinkAgreed:
         parts.append("(위기 신호 감지됨 — 위로 후 전문가 연계를 부드럽게 권할 것)")
 
     reply = await asyncio.to_thread(_gen_text, PROMPT_MOMO_SYSTEM, "\n\n".join(parts))
@@ -557,6 +568,28 @@ async def momo_reply(req: MomoReplyRequest):
         else:
             reply = "그 마음 충분히 그럴 수 있어. 오늘은 작은 한 걸음만 같이 떠올려보자."
     return MomoReplyResponse(reply=reply.strip(), escalate=escalate)
+
+
+PROMPT_MOMO_DIARY = (
+    "너는 사용자의 하루 대화를 바탕으로 '1인칭 일기'를 써주는 도우미다.\n"
+    "- 사용자(me) 발화를 중심으로 오늘 있었던 일과 감정을 '나는…' 1인칭으로.\n"
+    "- 모모 말은 참고만 하고 그대로 옮기지 말 것. 2~4문장, 담백하게. 본문만."
+)
+@app.post("/api/momo/diary", response_model=MomoDiaryResponse)
+async def momo_diary(req: MomoDiaryRequest):
+    """당일 모모 대화 → 1인칭 일기 본문. 프론트 chatToDiary() 계약."""
+    # def who(m): return "me" if (m.who or m.role or "").lower() in ("me", "user") else "momo"
+    def who(m): return "me"
+    def txt(m): return (m.text or m.content or "").strip()
+
+    lines = [f"{who(m)}: {txt(m)}" for m in req.messages if txt(m)]
+    if not lines:
+        return MomoDiaryResponse(diary="")
+    body = await asyncio.to_thread(_gen_text, PROMPT_MOMO_DIARY, "\n".join(lines))
+    if not body:  # LLM 실패 → 사용자 발화 이어붙이기 (프론트 폴백과 동일)
+        body = " ".join(txt(m) for m in req.messages if who(m) == "me" and txt(m))
+    return MomoDiaryResponse(diary=body.strip())
+
 
 @app.post("/api/embed", response_model=EmbedResponse)
 def embed(req: EmbedRequest):
@@ -647,7 +680,7 @@ async def vision(photo: UploadFile = File(...)):
         mime = photo.content_type or "image/jpeg"
         d = analyzer.analyze_image(mime, b64)
         eh = d.get("emotion_hint")
-        if eh not in ("bloom", "calm", "tense", "wither", "void"):
+        if eh not in EMOTION_LABELS:   # 7감정 라벨 중 하나만 허용
             eh = None
         return VisionResponse(
             labels=[str(x) for x in (d.get("labels") or [])][:5] or ["사진"],

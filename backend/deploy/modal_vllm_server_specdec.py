@@ -36,6 +36,8 @@ Baseline vLLM(단일 GPU) + Speculative Decoding 을 Modal 에 띄우는 배포 
 ━━━ 반드시 알아둘 제약 ━━━
   1) draft 와 target 은 '같은 토크나이저/vocab' 이어야 한다.
      → Qwen3-0.6B ↔ Qwen3-8B 는 동일 계열이라 OK. 서로 다른 계열 섞으면 안 됨.
+     동일계열 : {0.6B, 1.7B, 8B}. 이중 0.6B가 가장 GPU 메모리 차지 않하고 파라미터 적음
+     ⚠️ 여유 있다면 acceptance rate까지 고려하기 위해 1.7B와 비교하기
   2) draft 모델도 같은 GPU 에 올라간다(가중치+KV 추가). 8B + 0.6B 가 L4 에 빠듯하면
      VLLM_MAX_MODEL_LEN 이나 VLLM_GPU_UTIL 을 낮춘다. (OOM 은 util 을 '낮춰서' 해결)
   3) draft-model 방식이 V1 엔진에서 에러나면 VLLM_USE_V1=0 으로 배포(V0 는 검증된 경로).

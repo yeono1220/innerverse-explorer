@@ -55,8 +55,16 @@ VLLM_PORT = 8000
 vllm_image = (
     modal.Image.debian_slim(python_version="3.12")
     # .pip_install("vllm==0.6.3", "huggingface_hub[hf_transfer]==0.26.2") # Qwen3-8B 로드를 위해 vllm 버전 수정 필요
-    .pip_install("vllm==0.9.1", "huggingface_hub[hf_transfer]")
-    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})  # 모델 다운로드 가속
+    # ===== FIX: transformers 핀 고정 — vllm 0.9.1 이 aimv2 를 직접 등록하는데
+    #   transformers>=4.54.0 이 aimv2 를 내장하면서 충돌("already used") → import 단계에서 죽음.
+    #   vllm<=0.10.0 은 transformers<4.54.0 필요. 4.51.3 = Qwen3 지원 + 커뮤니티 검증된 안전값.
+    #   기존: .pip_install("vllm==0.9.1", "huggingface_hub[hf_transfer]")
+    # --- FIX2: [hf_transfer] 제거 → huggingface_hub 가 hf_xet(Xet 가속)을 자동 포함 (deprecated 회피)
+    .pip_install("vllm==0.9.1", "transformers==4.51.3", "huggingface_hub")
+    # ===== /FIX =====
+    # --- FIX2: HF_HUB_ENABLE_HF_TRANSFER 제거 (deprecated 경고). hf_xet 설치 시 Xet 이 기본 활성
+    #   (adaptive concurrency)이라 env 불필요. HF_XET_HIGH_PERFORMANCE=1 은 16GB 버퍼·RAM 64GB 요구 →
+    #   L4 기본 컨테이너에선 호스트 RAM OOM 위험이라 일부러 안 켬 (필요하면 memory=65536+ 후 추가).
 )
 
 # 모델 가중치 캐시용 볼륨 — 재배포/스케일 시 재다운로드 방지
@@ -81,8 +89,9 @@ except Exception:
     timeout=60 * 60,             # 긴 배치/다운로드 대비
     scaledown_window=SCALEDOWN_WINDOW,
 )
-@modal.concurrent(max_inputs=MAX_CONCURRENT)
+@modal.concurrent(max_inputs=MAX_CONCURRENT) # 동시에 처리할 요청
 @modal.web_server(port=VLLM_PORT, startup_timeout=60 * 10)
+#  ⚠️ 모든 웹 함수는 요청당 150초 하드 HTTP 타임아웃 강제(별도 지정 불가)
 def serve():
     """vLLM 의 OpenAI 호환 서버를 그대로 띄운다.
     → https://<...>.modal.run/v1/chat/completions 로 접근 가능."""
@@ -93,17 +102,24 @@ def serve():
         "--host", "0.0.0.0",
         "--port", str(VLLM_PORT),
         # 컨텍스트 길이는 모델/GPU 메모리에 맞춰 조정
-        # "--max-model-len", os.environ.get("VLLM_MAX_MODEL_LEN", "8192"),
-        "--max-model-len", os.environ.get("VLLM_MAX_MODEL_LEN", "16384"),
+        "--max-model-len", os.environ.get("VLLM_MAX_MODEL_LEN", "8192"),
+        # "--max-model-len", os.environ.get("VLLM_MAX_MODEL_LEN", "16384"),
         # Qwen3-8B에서 사고과정/답변생성 분리
-        "--reasoning-parser qwen3"
+        # ===== FIX: 한 문자열 → 두 토큰 (shell=False 리스트는 원소 안 공백을 안 쪼갬) =====
+        # 기존: "--reasoning-parser qwen3"  → vllm 이 통째로 보고 인자 인식 실패
+        "--reasoning-parser", "qwen3",
+        # ===== /FIX =====
     ]
     if API_KEY:
         cmd += ["--api-key", API_KEY]
 
     print("[modal_vllm] 실행:", " ".join(cmd))
-    # subprocess.Popen(" ".join(cmd), shell=True)
-    subprocess.Popen(" ".join(cmd), shell=False)
+    # ===== FIX: shell=False 에는 리스트(cmd)를 그대로 — join 하면 안 됨 =====
+    # 기존: subprocess.Popen(" ".join(cmd), shell=False)
+    #   → 합친 문자열 전체를 '실행파일명'으로 찾아 FileNotFoundError
+    #   → 리스트+shell=False 가 정석(중간 셸 없이 vllm 직접 실행 → 종료 시그널도 깔끔)
+    subprocess.Popen(cmd)
+    # ===== /FIX =====
 
 # ── 배포 후 헬스체크용 로컬 진입점 ──
 # 사용:  modal run modal_vllm_server.py            # 모델 목록 확인

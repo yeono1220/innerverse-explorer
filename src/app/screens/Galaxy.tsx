@@ -12,6 +12,7 @@ function emotionToPlanetColor(e: string): "green" | "blue" | "amber" | "love" | 
     case "차분": return "green";
     case "사랑": return "love";
     case "슬픔": return "blue";
+    case "분노": return "amber";
     case "긴장": return "amber";
     case "공허": return "void";
     default: return "purple";
@@ -83,7 +84,7 @@ export default function Galaxy() {
         <Card>
           <div className="iv-section-h">감정 분포</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {(["기쁨", "차분", "사랑", "슬픔", "긴장", "공허"] as const).map((label) => {
+            {(["기쁨", "차분", "사랑", "슬픔", "분노", "긴장", "공허"] as const).map((label) => {
               const n = entries.filter((e) => e.primary === label).length;
               return (
                 <div

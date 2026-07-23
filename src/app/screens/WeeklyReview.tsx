@@ -53,7 +53,7 @@ export default function WeeklyReview() {
             <span
               style={{
                 color: dominant
-                  ? `var(--iv-emo-${dominant.label === "차분" ? "calm" : dominant.label === "기쁨" ? "joy" : dominant.label === "사랑" ? "love" : dominant.label === "슬픔" ? "sad" : dominant.label === "긴장" ? "tension" : "empty"})`
+                  ? `var(--iv-emo-${dominant.label === "차분" ? "calm" : dominant.label === "기쁨" ? "joy" : dominant.label === "사랑" ? "love" : dominant.label === "슬픔" ? "sad" : dominant.label === "긴장" ? "tension" : dominant.label === "분노" ? "anger" : "empty"})`
                   : "var(--iv-purple2)",
               }}
             >

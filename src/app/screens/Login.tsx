@@ -15,7 +15,7 @@ export default function Login() {
 
   const onEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    loginWithEmail(email, pw);
+    // loginWithEmail(email, pw);
   };
 
   return (
@@ -37,7 +37,7 @@ export default function Login() {
         <div style={{ marginTop: "auto", width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
           {mode === "choose" ? (
             <>
-              <Button block onClick={loginWithKakao} disabled={busy} style={{ background: "#FEE500", color: "#181600" }}>
+              <Button /*block onClick={loginWithKakao} disabled={busy} style={{ background: "#FEE500", color: "#181600" }}*/>
                 💬 카카오로 3초 만에 시작
               </Button>
               <Button block variant="ghost" onClick={() => setMode("email")}>
@@ -50,7 +50,7 @@ export default function Login() {
               >
                 처음이신가요? 회원가입 →
               </button>
-              {error && <p style={{ fontSize: 12, color: "#e8744e" }}>{error}</p>}
+              {/*error && <p style={{ fontSize: 12, color: "#e8744e" }}>{error}</p>*/}
               <p style={{ fontSize: 11, color: "var(--iv-txt3)", marginTop: 4 }}>
                 계속하면 이용약관과 개인정보처리방침에 동의합니다.
               </p>
@@ -72,7 +72,7 @@ export default function Login() {
                 value={pw}
                 onChange={(e) => setPw(e.target.value)}
               />
-              {error && <p style={{ fontSize: 12, color: "#e8744e" }}>{error}</p>}
+              {/*error && <p style={{ fontSize: 12, color: "#e8744e" }}>{error}</p>*/}
               <Button block type="submit" disabled={busy}>
                 {busy ? "로그인 중…" : "로그인"}
               </Button>

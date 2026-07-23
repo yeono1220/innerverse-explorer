@@ -216,7 +216,7 @@ async def _handle(path):
     resp = await make_response(_stream(f"{DECODE}{path}", original))
     resp.timeout = None
     resp.headers["Content-Type"] = (
-        # SSE(server-sent events) - 
+        # SSE(server-sent events) 
         "text/event-stream" if original.get("stream") else "application/json"
     )
     return resp

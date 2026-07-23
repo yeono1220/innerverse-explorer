@@ -1,7 +1,17 @@
-// INNERVERSE 감정 상태 store
-// 감정 누적 → decideBranch → 행성 분기 전환 + 배경 테마.
+// INNERVERSE 감정 상태 store (7감정 단일 소스)
+// 감정 누적(7종) → decideBranch(argmax) → 행성 분기(7종) 전환 + 배경 테마.
 import { create } from "zustand";
-import { BRANCH, COL, LINES, TALK_LINES, decideBranch, type BranchKey, type EmoKey } from "@/glass-momo/constants";
+import {
+  BRANCH,
+  COL,
+  LINES,
+  TALK_LINES,
+  POSITIVE,
+  EMO7,
+  decideBranch,
+  type BranchKey,
+  type Emo7,
+} from "@/glass-momo/constants";
 import {
   BG_PRESET_BY_KEY,
   customBg,
@@ -10,7 +20,7 @@ import {
 } from "@/glass-momo/bgPresets";
 
 interface EmotionState {
-  emo: Record<EmoKey, number>;
+  emo: Record<Emo7, number>;
   branch: BranchKey;
   branchAmount: number;
   friendMode: boolean;
@@ -20,7 +30,7 @@ interface EmotionState {
   burstTick: number;
   outcomeTick: number;
   speechTick: number;
-  lastBurstEmo: EmoKey | null;
+  lastBurstEmo: Emo7 | null;
   lastBurstOrigin: "momo" | "friend";
 
   speech: string;
@@ -31,7 +41,8 @@ interface EmotionState {
   bgPreset: BgPresetKey;
   bgCustom: [string, string, string];
 
-  feed: (key: EmoKey) => void;
+  feed: (key: Emo7) => void;
+  setEmotions: (emo7: Partial<Record<Emo7, number>>) => void; // 일기 분석 7감정 → 행성 반영
   talk: () => void;
   toggleFriend: (on?: boolean) => void;
   reset: () => void;
@@ -69,11 +80,19 @@ function saveBg(s: StoredBg) {
   }
 }
 
-const initialEmo: Record<EmoKey, number> = { pos: 30, calm: 0, ten: 10, sad: 8, emp: 6 };
+const ZERO: Record<Emo7, number> = { joy: 0, calm: 0, love: 0, sad: 0, anger: 0, tension: 0, empty: 0 };
+const initialEmo: Record<Emo7, number> = { joy: 30, calm: 10, love: 6, sad: 8, anger: 6, tension: 10, empty: 6 };
 
-function applyBranch(emo: Record<EmoKey, number>) {
+function applyBranch(emo: Record<Emo7, number>) {
   const { key, amount } = decideBranch(emo);
   return { branch: key, branchAmount: amount };
+}
+
+// 클릭한 감정을 크게 +, 다른 '군'은 천천히 감쇠(같은 긍정/부정 군끼리는 유지).
+function isSameGroup(a: Emo7, b: Emo7): boolean {
+  const aPos = POSITIVE.includes(a);
+  const bPos = POSITIVE.includes(b);
+  return aPos === bPos;
 }
 
 export const useEmotionStore = create<EmotionState>((set, get) => {
@@ -101,18 +120,9 @@ export const useEmotionStore = create<EmotionState>((set, get) => {
 
     feed: (key) => {
       const emo = { ...get().emo };
-      // 클릭한 감정만 크게 +, 나머지는 천천히 감쇠 → 지배 감정이 바뀌면 분기도 전환
-      if (key === "pos") emo.pos += 14;
-      else if (key === "calm") emo.calm += 12;
-      else if (key === "ten") emo.ten += 16;
-      else if (key === "sad") emo.sad += 16;
-      else emo.emp += 16;
-
-      const keys: EmoKey[] = ["pos", "calm", "ten", "sad", "emp"];
-      keys.forEach((k) => {
-        // pos↔calm 사이는 같은 긍정군이라 서로 감쇠 안 함
-        const sameGroup = (key === "pos" && k === "calm") || (key === "calm" && k === "pos");
-        if (k !== key && !sameGroup) emo[k] = emo[k] * 0.94;
+      emo[key] += 15;
+      EMO7.forEach((k) => {
+        if (k !== key && !isSameGroup(key, k)) emo[k] = emo[k] * 0.94;
       });
 
       const prevBranch = get().branch;
@@ -136,6 +146,26 @@ export const useEmotionStore = create<EmotionState>((set, get) => {
       });
     },
 
+    // 일기 분석 결과(7감정) → 행성 분기 + 감정 조각 버스트. (감정→행성 반영)
+    setEmotions: (emo7) => {
+      const emo: Record<Emo7, number> = { ...ZERO, ...emo7 };
+      const { branch, branchAmount } = applyBranch(emo);
+      const dom = EMO7.reduce((a, b) => (emo[b] > emo[a] ? b : a), "calm" as Emo7);
+      set({
+        emo,
+        branch,
+        branchAmount,
+        lastBurstEmo: dom,
+        lastBurstOrigin: "momo",
+        burstTick: get().burstTick + 1,
+        hopTick: get().hopTick + 1,
+        outcomeShown: true,
+        outcomeTick: get().outcomeTick + 1,
+        speech: "오늘의 감정이 행성에 스며들었어 🌱",
+        speechTick: get().speechTick + 1,
+      });
+    },
+
     talk: () => {
       const line = TALK_LINES[Math.floor(Math.random() * TALK_LINES.length)];
       set({
@@ -155,7 +185,7 @@ export const useEmotionStore = create<EmotionState>((set, get) => {
     },
 
     reset: () => {
-      const emo: Record<EmoKey, number> = { pos: 8, calm: 0, ten: 4, sad: 4, emp: 4 };
+      const emo: Record<Emo7, number> = { joy: 8, calm: 6, love: 3, sad: 4, anger: 3, tension: 4, empty: 4 };
       const { branch, branchAmount } = applyBranch(emo);
       set({
         emo,
@@ -199,6 +229,6 @@ export function selectBackground(s: EmotionState): string {
   return BG_PRESET_BY_KEY[s.bgPreset].bg;
 }
 
-// 외부에서 BRANCH/COL 다시 import 안 하도록 재노출 편의
-export { BRANCH, COL, LINES };
-export type { BranchKey, EmoKey };
+// 외부에서 constants 다시 import 안 하도록 재노출 편의
+export { BRANCH, COL, LINES, EMO7 };
+export type { BranchKey, Emo7 };
