@@ -87,6 +87,7 @@ export async function momoReply(input: {
   emotions?: Record<string, number>;
   context?: string[];
   history?: string[] ; profile?: string;
+  session_id?: string; // 모모챗 세션 식별(성능 9지표 로깅용)
 }): Promise<{ reply: string; escalate: boolean }> {
   const res = await fetch(`${API_BASE}/api/momo/reply`, {
     method: "POST",
@@ -133,11 +134,12 @@ export async function reflect(input: {
 /** 당일 모모 대화 → 1인칭 일기 자동생성. 실패 시 예외(호출부가 폴백). */
 export async function chatToDiary(
   messages: Array<{ who?: string; role?: string; text?: string; content?: string }>,
+  sessionId?: string,
 ): Promise<string> {
   const res = await fetch(`${API_BASE}/api/momo/diary`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, session_id: sessionId }),
   });
   if (!res.ok) throw new Error(`chatToDiary ${res.status}`);
   const data = (await res.json()) as { diary?: string };

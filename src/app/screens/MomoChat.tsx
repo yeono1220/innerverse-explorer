@@ -39,6 +39,16 @@ export default function MomoChat() {
   const [careOpen, setCareOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // 모모챗 세션 id — vLLM 성능 9지표 로깅을 이 대화에 귀속시키기 위함(마운트당 1개)
+  const sessionRef = useRef<string>("");
+  if (!sessionRef.current) {
+    sessionRef.current =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `momo-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+  }
+  const sessionId = sessionRef.current;
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs.length]);
@@ -69,6 +79,7 @@ export default function MomoChat() {
       context: hits.map((h) => h.snippet),
       history,
       profile: memoryPromptBlock(mem),
+      session_id: sessionId,
     });
     if (r?.reply) reply = r.reply;
     if (r?.escalate) window.setTimeout(() => setCareOpen(true), 700);
@@ -86,7 +97,7 @@ export default function MomoChat() {
         back
         title="모모와 대화"
         right={
-          <IconButton onClick={() => nav("/momo/complete", { state: { msgs } })} ariaLabel="일기로 완성">
+          <IconButton onClick={() => nav("/momo/complete", { state: { msgs, sessionId } })} ariaLabel="일기로 완성">
             ✓
           </IconButton>
         }

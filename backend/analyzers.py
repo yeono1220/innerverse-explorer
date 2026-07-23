@@ -162,8 +162,9 @@ class DummyAnalyzer(Analyzer):
         return "그 마음 충분히 그럴 수 있어. 오늘은 작은 한 걸음만 같이 떠올려보자."
 
 
-#   로그 데이터 ─ 비스트리밍 응답에서 얻는 지표(E2E/토큰/finish_reason) 한 줄 로깅
-#   TTFT/TPOT 는 비스트리밍에선 클라이언트에서 못 재므로 서버 vLLM /metrics로 본다.
+#   로그 데이터 ─ 비스트리밍 응답에서 얻는 지표(E2E/토큰/finish_reason) 한 줄 로깅.
+#   이 함수는 analyze(JSON) 등 '비스트리밍' 경로 전용이라 TTFT/TPOT 를 재지 않는다.
+#   모모챗 생성(momo_reply/momo_diary)은 momo_metrics.streaming_chat 가 '요청별' TTFT/TPOT 를 직접 측정한다.
 def _log_vllm_metrics(*, call_type, model, temperature, json_mode, resp, e2e_s):
     u = getattr(resp, "usage", None)
     ptok = getattr(u, "prompt_tokens", None)
@@ -242,6 +243,26 @@ class VllmAnalyzer(Analyzer):
                           resp=resp, e2e_s=time.perf_counter() - _t0)
 
         return resp.choices[0].message.content or ""
+
+    def generate_logged(self, system: str, user: str, *, call_type: str,
+                        session_id: str | None = None) -> str:
+        """모모챗 전용 — 스트리밍으로 호출하며 9지표(ttft/tpot/e2e/토큰 + vLLM /metrics)를 로깅.
+        프론트 계약은 그대로(백엔드가 스트림을 다 받아 완성 텍스트를 반환). momo_metrics 로 위임."""
+        from momo_metrics import streaming_chat
+        client = self._get_client()
+        text, _rec = streaming_chat(
+            client,
+            self._model,
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            settings.GEN_TEMPERATURE,
+            self._endpoint.base_url,
+            call_type=call_type,
+            session_id=session_id,
+        )
+        return text
 
 ''' 멀티 모달로 확장
     def analyze_image(self, mime: str, b64: str) -> dict:

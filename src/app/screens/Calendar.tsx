@@ -111,7 +111,7 @@ export default function Calendar() {
 
         {selDate && (
           <>
-            <CapLabel>{selDate.replaceAll("-", ".")}</CapLabel>
+            <CapLabel>{selDate.split("-").join(".")}</CapLabel>
             {selected.length === 0 ? (
               <div style={{ color: "var(--iv-txt3)", fontSize: 12.5, padding: 20, textAlign: "center" }}>
                 기록 없음

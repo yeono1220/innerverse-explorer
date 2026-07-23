@@ -41,6 +41,7 @@ app = FastAPI(title="Innerverse AI Backend", version="0.1.0")
 # 🚨 CORS — 배포 시 CORS_ORIGINS 를 실제 프론트 도메인으로 좁힐 것 (config.py)
 from config import settings
 from schema import attach_colors, branch_of, BRANCHES, EMOTION_LABELS
+from momo_metrics import log_session_summary  # 모모챗 성능 9지표 세션 요약
 
 app.add_middleware(
     CORSMiddleware,
@@ -97,6 +98,7 @@ class MomoReplyRequest(BaseModel):
     context: list[str] = Field(default_factory=list)  # RAG: 검색된 과거 일기 스니펫
     profile: str = ""  # ③④ 사실·성향 요약 (항상 주입되는 장기기억)
     isLinkAgreed : bool = False # 전문가 연계는 사용자가 동의 하에 진행
+    session_id: Optional[str] = None  # 모모챗 세션 식별(성능 9지표 로깅용)
 
 
 class EmbedRequest(BaseModel):
@@ -185,6 +187,7 @@ class MomoDiaryMessage(BaseModel):
 
 class MomoDiaryRequest(BaseModel):
     messages: list[MomoDiaryMessage] = Field(default_factory=list)
+    session_id: Optional[str] = None  # 모모챗 세션 식별(대화 마무리 요약용)
 
 class MomoDiaryResponse(BaseModel):
     diary:str
@@ -387,6 +390,25 @@ def _gen_text(system: str, user: str) -> Optional[str]:
         return None
 
 
+def _gen_text_momo(system: str, user: str, *, call_type: str,
+                   session_id: Optional[str] = None) -> Optional[str]:
+    """모모챗 전용 generate — vLLM 이면 스트리밍 계측(9지표 로깅) 경로, 그 외엔 일반 generate.
+    성능 로깅은 '모모챗에서만' 하므로 여기서만 generate_logged 를 탄다."""
+    analyzer: Analyzer = get_analyzer()
+    if getattr(analyzer, "name", "") == "vllm" and hasattr(analyzer, "generate_logged"):
+        try:
+            out = analyzer.generate_logged(system, user, call_type=call_type, session_id=session_id)
+            return out.strip() if out else None
+        except Exception as e:
+            print(f"[momo-metrics] 스트리밍 계측 실패 → 일반 generate 폴백: {e}")
+    try:
+        out = analyzer.generate(system, user)
+        return out.strip() if out else None
+    except Exception as e:
+        print(f"[main] generate 실패({analyzer.name}): {e}")
+        return None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 라우트
 # ─────────────────────────────────────────────────────────────────────────────
@@ -479,8 +501,8 @@ def health():
         "analyzer_backend": settings.ANALYZER_BACKEND,   # 설정값
         "active_analyzer": _analyzer.name,         # 실제 활성(폴백 반영)
         "vllm_provider": settings.VLLM_PROVIDER,           # 설정값
-        "vllm_provider_resolved": provider_name,
-        "vllm_base_url": provider_url,
+        "vllm_provider_resolved": provider_name or None,
+        "vllm_base_url": provider_url or None,
         "vllm_model": settings.VLLM_MODEL or None,
         "fallback_to_dummy": settings.FALLBACK_TO_DUMMY,
     }
@@ -559,7 +581,11 @@ async def momo_reply(req: MomoReplyRequest):
     if escalate and req.isLinkAgreed:
         parts.append("(위기 신호 감지됨 — 위로 후 전문가 연계를 부드럽게 권할 것)")
 
-    reply = await asyncio.to_thread(_gen_text, PROMPT_MOMO_SYSTEM, "\n\n".join(parts))
+    # reply = await asyncio.to_thread(_gen_text, PROMPT_MOMO_SYSTEM, "\n\n".join(parts))
+    reply = await asyncio.to_thread(
+        _gen_text_momo, PROMPT_MOMO_SYSTEM, "\n\n".join(parts),
+        call_type="momo_reply", session_id=req.session_id,
+    )
     if not reply:
         if escalate:
             reply = "많이 힘들었구나. 지금은 저보다 전문가의 도움이 필요한 순간 같아요. 비대면 상담을 연결해 드릴까요?"
@@ -585,9 +611,15 @@ async def momo_diary(req: MomoDiaryRequest):
     lines = [f"{who(m)}: {txt(m)}" for m in req.messages if txt(m)]
     if not lines:
         return MomoDiaryResponse(diary="")
-    body = await asyncio.to_thread(_gen_text, PROMPT_MOMO_DIARY, "\n".join(lines))
+    # body = await asyncio.to_thread(_gen_text, PROMPT_MOMO_DIARY, "\n".join(lines))
+    body = await asyncio.to_thread(
+        _gen_text_momo, PROMPT_MOMO_DIARY, "\n".join(lines),
+        call_type="momo_diary", session_id=req.session_id,
+    )
     if not body:  # LLM 실패 → 사용자 발화 이어붙이기 (프론트 폴백과 동일)
         body = " ".join(txt(m) for m in req.messages if who(m) == "me" and txt(m))
+    # 대화 마무리 시점 — 이 세션의 턴 지표를 집계해 요약 출력(모모챗 전용, vLLM 일 때만 데이터 있음)
+    log_session_summary(req.session_id)
     return MomoDiaryResponse(diary=body.strip())
 
 

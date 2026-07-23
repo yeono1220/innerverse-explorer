@@ -19,7 +19,10 @@ export default function DiaryComplete() {
   const nav = useNavigate();
   const loc = useLocation();
   const add = useDiaryStore((s) => s.add);
-  const msgs: Msg[] = (loc.state as { msgs?: Msg[] })?.msgs ?? [];
+  const state = loc.state as { msgs?: Msg[]; sessionId?: string } | null;
+  // const msgs: Msg[] = (loc.state as { msgs?: Msg[] })?.msgs ?? [];
+  const msgs: Msg[] = state?.msgs ?? [];
+  const sessionId = state?.sessionId; // 모모챗 세션 id — 대화 마무리 성능 요약용
   const myLines = msgs.filter((m) => m.who === "me");
   const body = myLines.map((m) => m.text).join(" ");
   const tally: Partial<Record<EmotionLabel, number>> = {};
@@ -48,7 +51,7 @@ export default function DiaryComplete() {
     };
     // 1) 대화 → 1인칭 일기 자동생성 (실패 시 사용자 발화 이어붙이기 폴백)
     try {
-      finalBody = await generateDiaryFromChat(turns);
+      finalBody = await generateDiaryFromChat(turns, sessionId);
     } catch {
       /* body 유지 */
     }

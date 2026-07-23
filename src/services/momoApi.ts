@@ -35,9 +35,9 @@ export async function saveMomoTurns(turns: ChatTurn[]): Promise<void> {
 }
 
 /** 대화 → 1인칭 일기 본문 자동생성(백엔드). 실패 시 사용자 발화 이어붙이기. */
-export async function generateDiaryFromChat(turns: ChatTurn[]): Promise<string> {
+export async function generateDiaryFromChat(turns: ChatTurn[], sessionId?: string): Promise<string> {
   try {
-    const body = await chatToDiary(turns.map((t) => ({ who: t.who, text: t.text })));
+    const body = await chatToDiary(turns.map((t) => ({ who: t.who, text: t.text })), sessionId);
     if (body?.trim()) return body.trim();
   } catch {
     /* 폴백으로 */
