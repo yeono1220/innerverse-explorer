@@ -462,7 +462,7 @@ def get_analyzer() -> Analyzer:
             print(f"[main] Analyzer 초기화 실패({e}) → dummy 로 폴백")
             from analyzers import DummyAnalyzer
             _analyzer = DummyAnalyzer()
-    print(f"[main] Analyzer Loaded: {_analyzer.name}")
+        print(f"[main] Analyzer Loaded: {_analyzer.name}")
     return _analyzer
 
 @app.get("/")
@@ -591,7 +591,8 @@ async def analyze_diary(
         os.remove(file_path)
 
     if text_data:
-        print(f"✍️ 텍스트 일기 수신: {text_data[:20]}...")
+        # print(f"✍️ 텍스트 일기 수신: {text_data[:20]}...")
+        print(f"✍️ 텍스트 일기 수신: {len(text_data)}자") # 일기 본문은 로그 남기지 않기 - 사생활 보호
 
     if not extracted_text.strip():
         return _heuristic_analyze(extracted_text)
