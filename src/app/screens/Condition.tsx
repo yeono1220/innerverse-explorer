@@ -5,7 +5,7 @@ import { StatusBar, AppBar, Body } from "../ui/layout";
 import { Card, Chip, Button, CapLabel } from "../ui/primitives";
 import { useAppStore } from "@/store/appStore";
 
-const TAGS = ["기쁨", "차분", "사랑", "긴장", "슬픔", "공허", "피곤", "들뜸", "지침"];
+const TAGS = ["기쁨", "차분", "사랑", "분노", "긴장", "슬픔", "공허", "피곤", "들뜸", "지침"];
 
 export default function Condition() {
   const nav = useNavigate();

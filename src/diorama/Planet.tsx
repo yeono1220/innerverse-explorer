@@ -7,16 +7,19 @@ import * as THREE from "three";
 import { useDioramaStore } from "./dioramaStore";
 import { PLANET_RADIUS } from "./constants";
 import { planetRot, walkInput } from "@/glass-momo/sharedRefs";
-import { useEmotionStore, BRANCH } from "@/store/emotionStore";
+import { useEmotionStore, BRANCH, EMO7, type Emo7 } from "@/store/emotionStore";
 import { Structures } from "./Structures";
 import { Momo } from "./Momo";
 
-const EMO_TINT: Record<"pos" | "calm" | "ten" | "sad" | "emp", THREE.Color> = {
-  pos: new THREE.Color(BRANCH.bloom.tint),
+// 7감정 → 행성 색(분기 tint). 감정 비율로 연속 블렌딩.
+const EMO_TINT: Record<Emo7, THREE.Color> = {
+  joy: new THREE.Color(BRANCH.bloom.tint),
   calm: new THREE.Color(BRANCH.calm.tint),
-  ten: new THREE.Color(BRANCH.tense.tint),
+  love: new THREE.Color(BRANCH.love.tint),
   sad: new THREE.Color(BRANCH.wither.tint),
-  emp: new THREE.Color(BRANCH.void.tint),
+  anger: new THREE.Color(BRANCH.rage.tint),
+  tension: new THREE.Color(BRANCH.tense.tint),
+  empty: new THREE.Color(BRANCH.void.tint),
 };
 
 export function Planet() {
@@ -32,7 +35,7 @@ export function Planet() {
   const targetCol = useMemo(() => {
     const c = new THREE.Color(0, 0, 0);
     let total = 0;
-    (["pos", "calm", "ten", "sad", "emp"] as const).forEach((k) => {
+    EMO7.forEach((k) => {
       const w = Math.max(0, emo[k] || 0);
       total += w;
       c.r += EMO_TINT[k].r * w;

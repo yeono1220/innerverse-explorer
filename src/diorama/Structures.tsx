@@ -34,8 +34,10 @@ function StructureSlot({ p }: { p: PlacedStructure }) {
     <group position={pos.toArray()} quaternion={[quat.x, quat.y, quat.z, quat.w]}>
       {p.type === "flowerTree" && <FlowerTree seed={p.seed} />}
       {p.type === "stoneStack" && <StoneStack seed={p.seed} />}
+      {p.type === "heartBloom" && <HeartBloom seed={p.seed} />}
       {p.type === "clockTower" && <ClockTower seed={p.seed} />}
       {p.type === "gravestone" && <Gravestone seed={p.seed} />}
+      {p.type === "emberSpike" && <EmberSpike seed={p.seed} />}
       {p.type === "emptyCage" && <EmptyCage seed={p.seed} />}
     </group>
   );
@@ -114,6 +116,55 @@ function Gravestone({ seed: _seed }: { seed: number }) {
         <cylinderGeometry args={[0.07, 0.07, 0.04, 12, 1, false, 0, Math.PI]} />
         <meshStandardMaterial color={"#6a6480"} flatShading />
       </mesh>
+    </group>
+  );
+}
+
+function HeartBloom({ seed }: { seed: number }) {
+  // 사랑 — 분홍 하트꽃잎 꽃송이 (줄기 + 두 구 + 아래 콘으로 하트 실루엣)
+  const tint = seed > 0.5 ? "#e87fb8" : "#f2a0c8";
+  return (
+    <group>
+      <mesh position={[0, 0.09, 0]} castShadow>
+        <cylinderGeometry args={[0.02, 0.03, 0.16, 6]} />
+        <meshStandardMaterial color={"#7a9e6e"} flatShading />
+      </mesh>
+      <mesh position={[-0.045, 0.28, 0]}>
+        <sphereGeometry args={[0.06, 10, 10]} />
+        <meshStandardMaterial color={tint} emissive={tint} emissiveIntensity={0.4} flatShading />
+      </mesh>
+      <mesh position={[0.045, 0.28, 0]}>
+        <sphereGeometry args={[0.06, 10, 10]} />
+        <meshStandardMaterial color={tint} emissive={tint} emissiveIntensity={0.4} flatShading />
+      </mesh>
+      <mesh position={[0, 0.2, 0]} rotation={[Math.PI, 0, 0]}>
+        <coneGeometry args={[0.085, 0.14, 8]} />
+        <meshStandardMaterial color={tint} emissive={tint} emissiveIntensity={0.35} flatShading />
+      </mesh>
+    </group>
+  );
+}
+
+function EmberSpike({ seed }: { seed: number }) {
+  // 분노 — 크게 터지는 붉은 폭죽 (잔불 바닥 + 콘 3개)
+  const tint = seed > 0.5 ? "#e8744e" : "#f0562e";
+  const spikes: Array<[number, number, number, number]> = [
+    [0, 0.22, 0, 0.34],
+    [0.06, 0.16, 0.03, 0.22],
+    [-0.05, 0.15, -0.04, 0.2],
+  ];
+  return (
+    <group>
+      <mesh position={[0, 0.02, 0]} castShadow>
+        <cylinderGeometry args={[0.09, 0.11, 0.04, 8]} />
+        <meshStandardMaterial color={"#7a2e1e"} flatShading />
+      </mesh>
+      {spikes.map(([x, y, z, h], i) => (
+        <mesh key={i} position={[x, y, z]} castShadow>
+          <coneGeometry args={[0.045, h, 5]} />
+          <meshStandardMaterial color={tint} emissive={tint} emissiveIntensity={0.5} flatShading />
+        </mesh>
+      ))}
     </group>
   );
 }

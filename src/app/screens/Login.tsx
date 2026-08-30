@@ -37,7 +37,7 @@ export default function Login() {
         <div style={{ marginTop: "auto", width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
           {mode === "choose" ? (
             <>
-              <Button block onClick={loginWithKakao} disabled={busy} style={{ background: "#FEE500", color: "#181600" }}>
+              <Button /*block onClick={loginWithKakao} disabled={busy} style={{ background: "#FEE500", color: "#181600" }}*/>
                 💬 카카오로 3초 만에 시작
               </Button>
               <Button block variant="ghost" onClick={() => setMode("email")}>

@@ -2,8 +2,9 @@
 Analyzer 계층 — 축 1: '무엇으로' 분석하는가.
 
 이 레이어의 책임:
-    사용자 텍스트를 받아 → 5감정/키워드/위기신호/7라벨 JSON 을 만든다.
+    사용자 텍스트를 받아 → 7감정/키워드/위기신호 JSON 을 만든다.
     (반환 dict 규격은 main._analyze_from_data 가 AnalyzeResponse 로 검증)
+    감정 축은 7종(기쁨/차분/사랑/슬픔/분노/긴장/공허) 하나뿐. schema.py 가 단일 소스.
 
 설계 원칙:
     - OpenAI 클라이언트는 '지연 생성'(첫 호출 때). import 시점에 네트워크/키를 안 건드림.
@@ -31,19 +32,21 @@ from providers import build_provider
 from pydantic import BaseModel
 
 # ── 공통 프롬프트 ──────────────────────────────────────────────
+# 7감정 단일 축. 과거 5감정(pos/calm/ten/sad/emp) 비율 요구는 제거 —
+# 5축은 서버가 7감정에서 파생하지 않고, 아예 폐기(행성 분기도 7종으로 확장됨).
 PROMPT_ANALYZE = (
-    "너는 감정 분석기다. 사용자의 일기를 읽고 Russell 순환모형 5감정의 '비율'을 0~100으로 매겨라.\n"
-    "- pos 고양(긍정·높은각성) / calm 평온(긍정·낮은각성) / ten 긴장(부정·높은각성)\n"
-    "- sad 격앙(부정·높은각성) / emp 침체(부정·낮은각성)\n"
+    "너는 감정 분석기다. 사용자의 일기를 읽고 아래 7가지 한국어 감정의 "
+    "비중(pct, 0~100 정수, 합은 100 근처)을 매겨라.\n"
+    "7감정: 기쁨 / 차분 / 사랑 / 슬픔 / 분노 / 긴장 / 공허.\n"
+    "- 기쁨: 신남·뿌듯·행복 / 차분: 평온·안정·담담 / 사랑: 애정·따뜻함·그리움\n"
+    "- 슬픔: 우울·눈물·외로움 / 분노: 화·짜증·억울 / 긴장: 불안·초조·걱정 / 공허: 무기력·허무·텅 빔\n"
+    "비중이 높은 순으로 정렬하고, 가장 강한 감정을 primary 로 정하라.\n"
     "또한 핵심 키워드 3개, 위기신호 점수(crisis_score 0~1)를 산출하라.\n"
-    "crisis_score는 자해·자살·심각한 절망 표현이 강할수록 1에 가깝게. (진단이 아니라 신호 강도)\n"
-    "ten, sad, emp의 비율이 높게 나온 경우, 그 생각의 근거를 묻는다. 생각의 재구성을 돕고 실행 가능한 다음 행동을 제안해야한다.\n"
-    "dominant 는 bloom|calm|tense|wither|void 중 하나.\n"
-    "또한 일기 화면 표시용으로 7개 한국어 감정라벨(기쁨/차분/사랑/슬픔/분노/긴장/공허)의 비중(pct, 합 100 근처)을 "
-    "비중 높은 순으로 매기고, 가장 강한 라벨을 primary로 정하라.\n"
-    '반드시 JSON만 출력: {{"pos":n,"calm":n,"ten":n,"sad":n,"emp":n,'
-    '"dominant":"...","keywords":[...],"crisis_score":n,'
-    '"diary":{{"emotions":[{{"label":"기쁨","pct":n}}],"primary":"기쁨"}}}}\n'
+    "crisis_score 는 자해·자살·심각한 절망 표현이 강할수록 1에 가깝게. (진단이 아니라 신호 강도)\n"
+    "슬픔·분노·긴장·공허가 높게 나오면 그 생각의 근거를 묻고 재구성을 도우며 "
+    "실행 가능한 다음 행동을 제안하라.\n"
+    '반드시 JSON만 출력: {{"emotions":[{{"label":"기쁨","pct":n}}],'
+    '"primary":"기쁨","keywords":[...],"crisis_score":n}}\n'
     '일기: """{text}"""'
 )
 
@@ -63,27 +66,18 @@ def _strip_code_fence(s: str) -> str:
     return s.strip()
 
 import re
-# Gemini 구조화 출력용 스키마 - circular import 방지 위해 여기 정의
+# Gemini 구조화 출력용 스키마 - circular import 방지 위해 여기 정의 (7감정)
 
 class _DiaryEmotion(BaseModel):
     label: str
     pct: int
 
 
-class _DiaryResult(BaseModel):
+class AnalyzeSchema(BaseModel):
     emotions: list[_DiaryEmotion]
     primary: str
-
-class AnalyzeSchema(BaseModel):
-    pos: int
-    calm: int
-    ten: int
-    sad: int
-    emp: int
-    dominant: str
     keywords: list[str]
     crisis_score: float
-    diary: _DiaryResult
 
 def _parse_json_object(raw: str) -> dict:
     """LLM JSON 안전 파싱: 코드펜스 제거 + 바깥 {...} 블록만 추출."""
@@ -120,7 +114,8 @@ class _LLMAnalyzer(Analyzer):
             system=self.ANALYZE_SYSTEM,
             user=PROMPT_ANALYZE.format(text=text),
             # max_tokens=1024,
-            max_tokens=2048,  # 토큰 수 넉넉히 - thinking + json 여유
+            # 토큰 수 넉넉히 - thinking + json 여유
+            max_tokens=2048,
             temperature=settings.ANALYZE_TEMPERATURE,
             json_mode=True,
             schema=AnalyzeSchema,
@@ -145,23 +140,43 @@ class _LLMAnalyzer(Analyzer):
 
 # ─────────────────────────────────────────────────────────────
 # 1) DummyAnalyzer — 외부 호출 없음 (기본값 / 폴백)
-#    외부 키·서버 전혀 없이도 API 계약이 항상 성립하도록.
+#    외부 키·서버 전혀 없이도 API 계약이 항상 성립하도록. (7감정 형태)
 # ─────────────────────────────────────────────────────────────
 class DummyAnalyzer(Analyzer):
     name = "dummy"
 
     def analyze(self, text: str) -> dict:
         return {
-            "pos": 12, "calm": 20, "ten": 8, "sad": 6, "emp": 6,
-            "dominant": "calm",
+            "emotions": [
+                {"label": "차분", "pct": 55},
+                {"label": "기쁨", "pct": 25},
+                {"label": "긴장", "pct": 20},
+            ],
+            "primary": "차분",
             "keywords": ["기록"],
             "crisis_score": 0.0,
-            "diary": {"emotions": [{"label": "calm", "pct": 100}], "primary": "calm"},
             "_dummy": True,
         }
 
     def generate(self, system: str, user: str) -> str:
         return "그 마음 충분히 그럴 수 있어. 오늘은 작은 한 걸음만 같이 떠올려보자."
+
+
+#   로그 데이터 ─ 비스트리밍 응답에서 얻는 지표(E2E/토큰/finish_reason) 한 줄 로깅.
+#   이 함수는 analyze(JSON) 등 '비스트리밍' 경로 전용이라 TTFT/TPOT 를 재지 않는다.
+#   모모챗 생성(momo_reply/momo_diary)은 momo_metrics.streaming_chat 가 '요청별' TTFT/TPOT 를 직접 측정한다.
+def _log_vllm_metrics(*, call_type, model, temperature, json_mode, resp, e2e_s):
+    u = getattr(resp, "usage", None)
+    ptok = getattr(u, "prompt_tokens", None)
+    ctok = getattr(u, "completion_tokens", None)
+    fr = resp.choices[0].finish_reason if getattr(resp, "choices", None) else None
+    e2e_tps = round(ctok / e2e_s, 2) if (ctok and e2e_s > 0) else None  # 참고용 (큐+prefill 섞임)
+    print("[metrics] " + json.dumps({
+        "ts": time.time(), "call_type": call_type, "model": model,
+        "temperature": temperature, "json_mode": json_mode, "stream": False,
+        "e2e_s": round(e2e_s, 4), "e2e_tps": e2e_tps,
+        "prompt_tokens": ptok, "completion_tokens": ctok, "finish_reason": fr,
+    }, ensure_ascii=False)) # 파이썬 객체를 JSON 형태로 변환
 
 
 # ── 2) VllmAnalyzer — OpenAI 호환 서버 ────────────────────────
@@ -194,6 +209,8 @@ class VllmAnalyzer(Analyzer):
 
     def analyze(self, text: str) -> dict:
         client = self._get_client()
+        # 로그 데이터 호출 직전 시각
+        _t0 = time.perf_counter()
         resp = client.chat.completions.create(
             model=self._model,
             messages=[{"role": "user", "content": PROMPT_ANALYZE.format(text=text)}],
@@ -201,10 +218,17 @@ class VllmAnalyzer(Analyzer):
             temperature=settings.ANALYZE_TEMPERATURE,
         )
         content = resp.choices[0].message.content or "{}"
+        # 로그 데이터: E2E/토큰/finish_reason 기록 (호출·반환은 원본 그대로)
+        _log_vllm_metrics(call_type="analyze", model=self._model,
+                          temperature=settings.ANALYZE_TEMPERATURE, json_mode=True,
+                          resp=resp, e2e_s=time.perf_counter() - _t0)
         return json.loads(_strip_code_fence(content))
 
     def generate(self, system: str, user: str) -> str:
         client = self._get_client()
+        # 로그 데이터: 호출 직전 시각
+        _t0 = time.perf_counter() # 시스템 시간 변경에 영향을 받지 않는 타이머
+
         resp = client.chat.completions.create(
             model=self._model,
             messages=[
@@ -213,7 +237,32 @@ class VllmAnalyzer(Analyzer):
             ],
             temperature=settings.GEN_TEMPERATURE,
         )
+        # 로그 데이터: E2E/토큰/finish_reason 기록
+        _log_vllm_metrics(call_type="generate", model=self._model,
+                          temperature=settings.GEN_TEMPERATURE, json_mode=False,
+                          resp=resp, e2e_s=time.perf_counter() - _t0)
+
         return resp.choices[0].message.content or ""
+
+    def generate_logged(self, system: str, user: str, *, call_type: str,
+                        session_id: str | None = None) -> str:
+        """모모챗 전용 — 스트리밍으로 호출하며 9지표(ttft/tpot/e2e/토큰 + vLLM /metrics)를 로깅.
+        프론트 계약은 그대로(백엔드가 스트림을 다 받아 완성 텍스트를 반환). momo_metrics 로 위임."""
+        from momo_metrics import streaming_chat
+        client = self._get_client()
+        text, _rec = streaming_chat(
+            client,
+            self._model,
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            settings.GEN_TEMPERATURE,
+            self._endpoint.base_url,
+            call_type=call_type,
+            session_id=session_id,
+        )
+        return text
 
 ''' 멀티 모달로 확장
     def analyze_image(self, mime: str, b64: str) -> dict:
@@ -232,7 +281,7 @@ class VllmAnalyzer(Analyzer):
                                 "이 사진을 보고 일기 맥락용으로 JSON만 출력해라. "
                                 '{"labels":[핵심 사물/장면 3~5개 한국어], '
                                 '"scene":"한 줄 분위기 묘사(한국어)", '
-                                '"emotion_hint":"pos|calm|tense|emp|sad 중 하나 또는 null"}'
+                                '"emotion_hint":"기쁨|차분|사랑|슬픔|분노|긴장|공허 중 하나 또는 null"}'
                             ),
                         },
                         {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
@@ -323,9 +372,9 @@ class ClaudeAnalyzer(_LLMAnalyzer):
         # Claude엔 json_object 강제 옵션이 없어 system 지시로 JSON 유도(+ _strip_code_fence 방어).
         sys_prompt = system + ("\n반드시 순수 JSON만 출력. 코드펜스·설명 금지." if json_mode else "")
         msg = client.messages.create(
-            model=self._model, 
+            model=self._model,
             max_tokens=max_tokens,
-            temperature=temperature, 
+            temperature=temperature,
             system=sys_prompt,
             messages=[{"role": "user", "content": user}],
         )
@@ -378,7 +427,8 @@ def reset_cache() -> None:
     """테스트/설정 변경 후 캐시 비우기."""
     _CACHE.clear()
 
-
+'''
 def active_backend_name() -> str:
     """실제로 활성화된 analyzer 이름 (폴백 반영). /health 표시용."""
     return build_analyzer().name
+'''

@@ -1,6 +1,8 @@
 // FastAPI(AI 백엔드) 호출 — 일기 분석.
 // 백엔드 /api/analyze 가 7라벨(diary) + 키워드 + crisis_score 를 반환한다.
 import type { EmotionLabel } from "@/store/diaryStore";
+import { SLUG_OF, type Emo7 } from "@/glass-momo/constants";
+import { getSession } from "@/services/auth";
 
 const API_BASE =
   (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_URL ?? "";
@@ -10,12 +12,15 @@ export interface DiaryAnalysis {
   keywords: string[];
   primary: EmotionLabel;
   crisis_score: number;
+  emo7: Record<Emo7, number>; // 행성 반영용 7감정 (diary.emotions 에서 파생)
+  dominant: string;
 }
 
 interface AnalyzeApiResponse {
   diary?: { emotions?: Array<{ label: string; pct: number }>; primary?: string };
   keywords?: string[];
   crisis_score?: number;
+  dominant?: string;
 }
 
 /** 일기 텍스트(+선택 음성)를 백엔드로 보내 7라벨 감정 분석을 받는다. */
@@ -24,18 +29,33 @@ export async function analyzeDiary(text: string, audio?: Blob): Promise<DiaryAna
   fd.append("text_data", text);
   if (audio) fd.append("audio_file", audio, "diary.webm");
 
-  const res = await fetch(`${API_BASE}/api/analyze`, { method: "POST", body: fd });
+  const res = await fetch(`${API_BASE}/api/analyze`, {
+    method: "POST",
+    body: fd,
+    headers: { ...(await authHeaders()) },
+  });
   if (!res.ok) throw new Error(`analyze ${res.status}`);
   const data = (await res.json()) as AnalyzeApiResponse;
 
+  const emotions = (data.diary?.emotions ?? []).map((e) => ({
+    label: e.label as EmotionLabel,
+    pct: e.pct,
+  }));
+  // 7감정 → 행성 반영용 Record<Emo7,number> 파생 (한글 라벨 → 슬러그)
+  const emo7: Record<Emo7, number> = {
+    joy: 0, calm: 0, love: 0, sad: 0, anger: 0, tension: 0, empty: 0,
+  };
+  emotions.forEach((e) => {
+    const k = SLUG_OF[e.label];
+    if (k) emo7[k] = e.pct;
+  });
   return {
-    emotions: (data.diary?.emotions ?? []).map((e) => ({
-      label: e.label as EmotionLabel,
-      pct: e.pct,
-    })),
+    emotions,
     keywords: data.keywords ?? [],
     primary: (data.diary?.primary ?? "차분") as EmotionLabel,
     crisis_score: data.crisis_score ?? 0,
+    emo7,
+    dominant: data.dominant ?? "calm",
   };
 }
 
@@ -44,7 +64,7 @@ export async function embed(text: string): Promise<number[] | null> {
   try {
     const res = await fetch(`${API_BASE}/api/embed`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...(await authHeaders()), "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
     });
     if (!res.ok) return null;
@@ -61,7 +81,7 @@ export async function analyzeVision(
 ): Promise<{ labels: string[]; scene: string; emotion_hint: string | null }> {
   const fd = new FormData();
   fd.append("photo", photo);
-  const res = await fetch(`${API_BASE}/api/vision`, { method: "POST", body: fd });
+  const res = await fetch(`${API_BASE}/api/vision`, { method: "POST", body: fd, headers: { ...(await authHeaders()) } });
   if (!res.ok) throw new Error(`vision ${res.status}`);
   return (await res.json()) as { labels: string[]; scene: string; emotion_hint: string | null };
 }
@@ -72,10 +92,11 @@ export async function momoReply(input: {
   emotions?: Record<string, number>;
   context?: string[];
   history?: string[] ; profile?: string;
+  session_id?: string; // 모모챗 세션 식별(성능 9지표 로깅용)
 }): Promise<{ reply: string; escalate: boolean }> {
   const res = await fetch(`${API_BASE}/api/momo/reply`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
   if (!res.ok) throw new Error(`momo ${res.status}`);
@@ -88,7 +109,7 @@ export async function weeklyReview(
 ): Promise<{ summary: string; recommendations: string[] }> {
   const res = await fetch(`${API_BASE}/api/weekly`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
     body: JSON.stringify({ diaries }),
   });
   if (!res.ok) throw new Error(`weekly ${res.status}`);
@@ -108,9 +129,28 @@ export async function reflect(input: {
 }> {
   const res = await fetch(`${API_BASE}/api/reflect`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
   if (!res.ok) throw new Error(`reflect ${res.status}`);
   return res.json();
+}
+
+/** 당일 모모 대화 → 1인칭 일기 자동생성. 실패 시 예외(호출부가 폴백). */
+export async function chatToDiary(
+  messages: Array<{ who?: string; role?: string; text?: string; content?: string }>,
+  sessionId?: string,
+): Promise<string> {
+  const res = await fetch(`${API_BASE}/api/momo/diary`, {
+    method: "POST",
+    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
+    body: JSON.stringify({ messages, session_id: sessionId }),
+  });
+  if (!res.ok) throw new Error(`chatToDiary ${res.status}`);
+  const data = (await res.json()) as { diary?: string };
+  return data.diary ?? "";
+}
+async function authHeaders(): Promise<Record<string, string>> {
+  const s = await getSession();
+  return s?.access_token ? { Authorization: `Bearer ${s.access_token}` } : {};
 }

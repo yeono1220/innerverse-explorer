@@ -62,7 +62,7 @@ export default function Settings() {
 
         <Card>
           <div className="iv-section-h" style={{ marginBottom: 0 }}>알림</div>
-          <div style={{ display: "flex", flexDirection: "column", divider: "1px solid var(--iv-hairline)" }}>
+          <div style={{ display: "flex", flexDirection: "column" }}>
             <Row
               label="앱 알림"
               sub="중요한 활동을 푸시로"

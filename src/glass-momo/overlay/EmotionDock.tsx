@@ -1,14 +1,16 @@
-// 하단 도크: 감정 5버튼 + 대화/친구 액션 + 리셋 텍스트버튼.
-import { useEmotionStore, type EmoKey } from "@/store/emotionStore";
+// 하단 도크: 감정 7버튼 + 대화/친구 액션 + 리셋 텍스트버튼.
+import { useEmotionStore, type Emo7 } from "@/store/emotionStore";
 
-type Feed = { key: EmoKey; emoji: string; label: string; group: "pos" | "neg" };
+type Feed = { key: Emo7; emoji: string; label: string; group: "pos" | "neg" };
 
 const FEEDS: Feed[] = [
-  { key: "pos", emoji: "😊", label: "기쁨·뿌듯", group: "pos" },
-  { key: "calm", emoji: "🌿", label: "차분·안도", group: "pos" },
-  { key: "ten", emoji: "😰", label: "긴장·불안", group: "neg" },
+  { key: "joy", emoji: "😊", label: "기쁨", group: "pos" },
+  { key: "calm", emoji: "🌿", label: "차분", group: "pos" },
+  { key: "love", emoji: "💗", label: "사랑", group: "pos" },
   { key: "sad", emoji: "🥲", label: "슬픔", group: "neg" },
-  { key: "emp", emoji: "🌫️", label: "공허", group: "neg" },
+  { key: "anger", emoji: "😠", label: "분노", group: "neg" },
+  { key: "tension", emoji: "😰", label: "긴장", group: "neg" },
+  { key: "empty", emoji: "🌫️", label: "공허", group: "neg" },
 ];
 
 export function EmotionDock() {

@@ -9,3 +9,7 @@ supabase>=2.4
 python-dotenv>=1.0
 google-genai>=1.0  # Gemini(from google import genai)
 anthropic>=0.40    # Claude
+# ── 인증(auth.py / auth_routes.py) ──
+pyjwt[crypto]>=2.8      # Supabase JWT 검증 (HS256 + JWKS 비대칭 서명)
+httpx>=0.27             # Supabase GoTrue REST 프록시
+email-validator>=2.1    # pydantic EmailStr

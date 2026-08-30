@@ -4,7 +4,8 @@ INNERVERSE 2.0 — AI Backend (FastAPI)
 API 계약 = BACKEND_AI_PLAN.md 3절. 응답 규격은 프론트 `src/store/emotionStore.ts`
 및 `src/lib/api-types.ts`와 1:1로 맞춰야 한다.
 
-5감정 키(pos/calm/ten/sad/emp)는 프론트·백·DB 전부에서 불변. (행성 색 블렌딩이 묶임)
+감정 축은 7종(기쁨/차분/사랑/슬픔/분노/긴장/공허)이 유일. schema.py 가 단일 소스.
+행성 분기 7종(bloom/calm/love/wither/rage/tense/void)은 감정에서 1:1 파생(schema.branch_of).
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 토글 구조 (2축 독립) — config.py / providers.py / analyzers.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -23,7 +24,7 @@ import asyncio
 import os
 import shutil
 from typing import Literal, Optional
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -31,7 +32,7 @@ from providers import build_provider
 from analyzers import (
     PROMPT_MOMO_SYSTEM,
     Analyzer,
-    active_backend_name,
+#    active_backend_name,
     build_analyzer,
 )
 
@@ -39,29 +40,69 @@ app = FastAPI(title="Innerverse AI Backend", version="0.1.0")
 
 # 🚨 CORS — 배포 시 CORS_ORIGINS 를 실제 프론트 도메인으로 좁힐 것 (config.py)
 from config import settings
-from schema import attach_colors
+from schema import attach_colors, branch_of, BRANCHES, EMOTION_LABELS
+
+# 인증 게이트 (auth.py) — 모든 /api/* 는 Supabase 로그인 사용자만 호출 가능
+from auth import CurrentUser, auth_settings, auth_status, require_user, user_rate_limit
+from auth_routes import router as auth_router
+
+# 모모챗 성능 9지표 — 이 모듈이 없어도 서버는 떠야 한다(측정은 부가 기능).
+try:
+    from momo_metrics import log_session_summary # 9가지 지표 요약
+except ImportError:  # 레포에 momo_metrics.py 가 없는 브랜치 대응
+    def log_session_summary(session_id=None):  # type: ignore[misc]
+        return None
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CORS — 배포에서는 반드시 실제 프론트 도메인으로 좁힌다.
+#   · render.yaml 은 ALLOWED_ORIGINS, config.py 는 CORS_ORIGINS 를 쓰고 있었다.
+#     둘 다 읽어서 이름 불일치로 CORS 가 열려버리는 사고를 막는다.
+#   · "*" 와 allow_credentials=True 는 브라우저가 거부하는 조합이라 같이 못 쓴다.
+# ─────────────────────────────────────────────────────────────────────────────
+def _resolve_cors_origins() -> tuple[list[str], bool]:
+    raw = os.getenv("ALLOWED_ORIGINS") or os.getenv("CORS_ORIGINS") or ""
+    origins = [o.strip() for o in raw.split(",") if o.strip()] or list(settings.CORS_ORIGINS)
+
+    if "*" in origins:
+        if auth_settings.is_production:
+            raise RuntimeError(
+                "APP_ENV=production 에서 CORS 를 '*' 로 열 수 없습니다. "
+                "ALLOWED_ORIGINS 에 프론트 도메인을 넣어주세요. (예: https://innerverse.vercel.app)"
+            )
+        print("⚠️  [cors] allow_origins='*' — 로컬 개발용입니다. 배포 전 ALLOWED_ORIGINS 를 설정하세요.")
+        return ["*"], False  # 와일드카드면 credentials 를 끈다 (브라우저 규격)
+    return origins, True
+
+
+_cors_origins, _cors_credentials = _resolve_cors_origins()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_cors_origins,
+    allow_credentials=_cors_credentials,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+# /api/auth/* — 이메일 회원가입·로그인·토큰 갱신 (+ 카카오 '준비 중' 안내)
+app.include_router(auth_router)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 공통 타입
 # ─────────────────────────────────────────────────────────────────────────────
-EmoKey = Literal["pos", "calm", "ten", "sad", "emp"]
-Dominant = Literal["bloom", "calm", "tense", "wither", "void"]
+# 행성 분기 7종 — schema.BRANCHES 와 1:1 (감정 primary 에서 파생)
+Dominant = Literal["bloom", "calm", "love", "wither", "rage", "tense", "void"]
 
 
 class EmotionScores(BaseModel):
-    pos: int = Field(0, ge=0, le=100)  # 고양 Elated
-    calm: int = Field(0, ge=0, le=100)  # 평온 Serene
-    ten: int = Field(0, ge=0, le=100)  # 긴장 Tense
-    sad: int = Field(0, ge=0, le=100)  # 격앙 Agitated
-    emp: int = Field(0, ge=0, le=100)  # 침체 Depressed
+    # 7감정 비중(선택 입력). 슬러그 키 = 프론트 Emo7 과 1:1.
+    joy: int = Field(0, ge=0, le=100)      # 기쁨
+    calm: int = Field(0, ge=0, le=100)     # 차분
+    love: int = Field(0, ge=0, le=100)     # 사랑
+    sad: int = Field(0, ge=0, le=100)      # 슬픔
+    anger: int = Field(0, ge=0, le=100)    # 분노
+    tension: int = Field(0, ge=0, le=100)  # 긴장
+    empty: int = Field(0, ge=0, le=100)    # 공허
 
 
 # 일기 화면용 7라벨 (기쁨/차분/사랑/슬픔/분노/긴장/공허) — 프론트 diaryStore.EmotionLabel 과 1:1
@@ -81,15 +122,10 @@ class DiaryResult(BaseModel):
 class AnalyzeResponse(BaseModel):
     status: str = "success"
     extracted_text: str
-    pos: int
-    calm: int
-    ten: int
-    sad: int
-    emp: int
-    dominant: Dominant
+    dominant: Dominant                 # 행성 분기(7종) — diary.primary 에서 파생
     keywords: list[str]
     crisis_score: float = Field(0.0, ge=0.0, le=1.0)
-    diary: DiaryResult  # 앱 일기 화면용 7라벨 결과
+    diary: DiaryResult  # 앱 일기 화면용 7감정 결과 (단일 소스)
 
 class MomoReplyRequest(BaseModel):
     text: str
@@ -97,6 +133,8 @@ class MomoReplyRequest(BaseModel):
     history: list[str] = Field(default_factory=list)
     context: list[str] = Field(default_factory=list)  # RAG: 검색된 과거 일기 스니펫
     profile: str = ""  # ③④ 사실·성향 요약 (항상 주입되는 장기기억)
+    isLinkAgreed : bool = False # 전문가 연계는 사용자가 동의 하에 진행
+    session_id: Optional[str] = None  # 모모챗 세션 식별(성능 9지표 로깅용)
 
 
 class EmbedRequest(BaseModel):
@@ -161,7 +199,7 @@ class CrisisCheckResponse(BaseModel):
 class VisionResponse(BaseModel):
     labels: list[str]
     scene: str
-    emotion_hint: Optional[Dominant] = None
+    emotion_hint: Optional[str] = None   # 7감정 라벨 중 하나 또는 None
 
 
 class WeeklyReviewResponse(BaseModel):
@@ -171,46 +209,35 @@ class WeeklyReviewResponse(BaseModel):
     recommendations: list[str]
 
 
+# diary Message draft test
+class MomoDiaryMessage(BaseModel):
+    who: Optional[str] = None
+    when : Optional[str] = None
+    how : Optional[str] = None
+    what : Optional[str] = None
+    where : Optional[str] = None
+    why : Optional[str] = None
+    text : Optional[str] = "" # 육하원칙 분석 실패시 text 뭉치로 반환
+    role : Optional[str] = None # 사용자(id)
+    content : Optional[str] = None # 텍스트 외의 데이터(음성, 사진)
+
+class MomoDiaryRequest(BaseModel):
+    messages: list[MomoDiaryMessage] = Field(default_factory=list)
+    session_id: Optional[str] = None  # 모모챗 세션 식별(대화 마무리 요약용)
+
+class MomoDiaryResponse(BaseModel):
+    diary:str
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 휴리스틱 (외부 백엔드 실패/미설정 시 폴백) — 계약을 항상 성립시키는 안전망
 # ─────────────────────────────────────────────────────────────────────────────
-def decide_dominant(e: dict[str, float]) -> Dominant:
-    """프론트 constants.ts decideBranch 와 동일 로직 (포팅). dominant 라벨 일치 보장."""
-    positivity = e["pos"] + e["calm"]
-    total = positivity + e["ten"] + e["sad"] + e["emp"] + 0.001
-    r_pos = positivity / total
-    r_ten = e["ten"] / total
-    r_sad = e["sad"] / total
-    r_emp = e["emp"] / total
-    if r_emp > 0.38:
-        return "void"
-    if r_sad > 0.34:
-        return "wither"
-    if r_ten > 0.34:
-        return "tense"
-    if r_pos > 0.5 and total > 55:
-        return "bloom"
-    return "calm"
+def dominant_of(primary: str | None) -> Dominant:
+    """대표 감정(primary) → 행성 분기(7종). schema.branch_of 단일 소스.
+    반환값은 항상 BRANCHES(7) 중 하나이므로 Dominant 로 유효."""
+    return branch_of(primary)  # type: ignore[return-value]
 
 
-# 아주 단순한 키워드 휴리스틱 (실서비스 아님 — 데모/계약 검증용)
-_LEXICON: dict[EmoKey, tuple[str, ...]] = {
-    "pos": ("행복", "기뻐", "신나", "설레", "좋았", "최고", "뿌듯", "사랑"),
-    "calm": ("평온", "편안", "안정", "괜찮", "고요", "차분", "휴식", "쉬었"),
-    "ten": ("긴장", "불안", "초조", "걱정", "조마", "떨려", "마감", "시험"),
-    "sad": ("화가", "분노", "짜증", "억울", "열받", "싫어", "답답"),
-    "emp": ("우울", "지쳐", "무기력", "외로", "공허", "슬퍼", "포기", "힘들"),
-}
 _CRISIS_TERMS = ("자해", "자살", "죽고", "죽고싶", "사라지고", "없어지고", "끝내고")
-
-
-def heuristic_emotions(text: str) -> EmotionScores:
-    scores = {"pos": 12, "calm": 10, "ten": 8, "sad": 6, "emp": 6}
-    for key, terms in _LEXICON.items():
-        for t in terms:
-            if t in text:
-                scores[key] += 22  # type: ignore[index]
-    return EmotionScores(**{k: max(0, min(100, v)) for k, v in scores.items()})
 
 
 def heuristic_crisis(text: str) -> float:
@@ -219,8 +246,15 @@ def heuristic_crisis(text: str) -> float:
 
 
 def heuristic_keywords(text: str) -> list[str]:
-    found = [t for terms in _LEXICON.values() for t in terms if t in text]
-    return (found[:3]) or ["기록"]
+    """7감정 규칙(_DIARY_RULES)에서 매칭된 표현을 키워드로 (실서비스 아님 — 데모/폴백용)."""
+    import re
+
+    found: list[str] = []
+    for _label, pat in _DIARY_RULES:
+        for m in re.findall(pat, text):
+            if m and m not in found:
+                found.append(m)
+    return found[:3] or ["기록"]
 
 
 # 7라벨 휴리스틱 (프론트 DiaryWrite.analyze 규칙 포팅) — LLM 실패 시 폴백_
@@ -274,18 +308,15 @@ def normalize_diary(raw: dict, text: str) -> DiaryResult:
 
 
 def _analyze_from_data(data: dict, text: str) -> AnalyzeResponse:
-    """analyzer 가 준 JSON dict → AnalyzeResponse (검증·클램프·폴백 포함)."""
-    emo = {k: max(0, min(100, int(data.get(k, 0) or 0))) for k in ("pos", "calm", "ten", "sad", "emp")}
-    dominant = data.get("dominant")
-    if dominant not in ("bloom", "calm", "tense", "wither", "void"):
-        dominant = decide_dominant({k: float(v) for k, v in emo.items()})
+    """analyzer 가 준 7감정 JSON dict → AnalyzeResponse (검증·클램프·폴백 포함).
+    감정/대표감정은 diary(7)로 통일하고, 행성 분기(dominant)는 primary 에서 파생한다.
+    (emotions/primary 는 최상위 키 — 7감정 계약)"""
+    diary = normalize_diary(data, text)
     keywords = [str(k) for k in (data.get("keywords") or [])][:3] or ["기록"]
     crisis = float(data.get("crisis_score", 0.0) or 0.0)
-    diary = normalize_diary(data.get("diary"), text)
     return AnalyzeResponse(
         extracted_text=text,
-        pos=emo["pos"], calm=emo["calm"], ten=emo["ten"], sad=emo["sad"], emp=emo["emp"],
-        dominant=dominant,
+        dominant=dominant_of(diary.primary),
         keywords=keywords,
         crisis_score=max(0.0, min(1.0, crisis)),
         diary=diary,
@@ -373,15 +404,14 @@ def embed_text(text: str) -> Optional[list[float]]:
         return None
 
 def _heuristic_analyze(text: str) -> AnalyzeResponse:
-    """완전 폴백 — 외부 백엔드 없이 계약을 성립시킨다."""
-    emo = heuristic_emotions(text)
+    """완전 폴백 — 외부 백엔드 없이 계약을 성립시킨다 (7감정)."""
+    diary = heuristic_diary(text)
     return AnalyzeResponse(
         extracted_text=text,
-        pos=emo.pos, calm=emo.calm, ten=emo.ten, sad=emo.sad, emp=emo.emp,
-        dominant=decide_dominant(emo.model_dump()),
+        dominant=dominant_of(diary.primary),
         keywords=heuristic_keywords(text),
         crisis_score=heuristic_crisis(text),
-        diary=heuristic_diary(text),
+        diary=diary,
     )
 
 
@@ -396,12 +426,29 @@ def _gen_text(system: str, user: str) -> Optional[str]:
         return None
 
 
+def _gen_text_momo(system: str, user: str, *, call_type: str,
+                   session_id: Optional[str] = None) -> Optional[str]:
+    """모모챗 전용 generate — vLLM 이면 스트리밍 계측(9지표 로깅) 경로, 그 외엔 일반 generate.
+    성능 로깅은 '모모챗에서만' 하므로 여기서만 generate_logged 를 탄다."""
+    analyzer: Analyzer = get_analyzer()
+    if getattr(analyzer, "name", "") == "vllm" and hasattr(analyzer, "generate_logged"):
+        try:
+            out = analyzer.generate_logged(system, user, call_type=call_type, session_id=session_id)
+            return out.strip() if out else None
+        except Exception as e:
+            print(f"[momo-metrics] 스트리밍 계측 실패 → 일반 generate 폴백: {e}")
+    try:
+        out = analyzer.generate(system, user)
+        return out.strip() if out else None
+    except Exception as e:
+        print(f"[main] generate 실패({analyzer.name}): {e}")
+        return None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 라우트
 # ─────────────────────────────────────────────────────────────────────────────
-@app.get("/")
-def read_root():
-    return {"message": "Innerverse AI Server is running!", "version": app.version}
+
 # ── 분석기 지연 초기화 ──
 # 시작 시 한 번만 생성해 재사용. 초기화가 실패해도 서버는 뜨게 하고 dummy 로 폴백 → 부분 장애가 전체 다운으로 안 번지게.
 _analyzer: Analyzer | None = None
@@ -412,17 +459,19 @@ def get_analyzer() -> Analyzer:
         try:
             _analyzer = build_analyzer()
         except Exception as e:
-            print(f"[main] 분석기 초기화 실패({e}) → dummy 로 폴백")
+            print(f"[main] Analyzer 초기화 실패({e}) → dummy 로 폴백")
             from analyzers import DummyAnalyzer
             _analyzer = DummyAnalyzer()
-    print(f"[main] 분석기 로드: {_analyzer.name}")
+    print(f"[main] Analyzer Loaded: {_analyzer.name}")
     return _analyzer
 
 @app.get("/")
 def read_root():
+    """공개 — 배포 헬스체크용. 인증 설정이 의도대로 켜졌는지 한눈에 확인한다."""
     return {"message": "Innerverse AI Server is running!",
-            "analyzer": get_analyzer().name}
-
+            "analyzer": get_analyzer().name,
+            "auth": auth_status()}
+'''
 @app.get("/health")
 def health():
     a = get_analyzer()
@@ -433,7 +482,7 @@ def health():
         # 축 2 는 vLLM 을 실제로 쓸 때만 의미. 그 외엔 None 으로 표시.
         "vllm_provider": getattr(a, "provider_name", None),
     }
-
+'''
 async def _run_analysis(text: str) -> dict:
     """
     분석기 호출 + 공통 후처리(색상) + 폴백을 한곳에서.
@@ -450,7 +499,7 @@ async def _run_analysis(text: str) -> dict:
             raise
     # 어떤 조합이든 반드시 이 후처리를 거쳐 색을 입힌다.
     return attach_colors(result)
-
+'''
 @app.get("/health")
 def health():
     """진단용 — 현재 두 축 토글과 실제 활성 백엔드(폴백 반영)"""
@@ -464,7 +513,7 @@ def health():
         except Exception as e:
             provider_name = settings.VLLM_PROVIDER
             provider_url = f"(미해결: {e})"
-
+    else : analyzer = get_analyzer()
     return {
         "status": "ok",
         "analyzer_backend": settings.ANALYZER_BACKEND,   # 설정값(축1)
@@ -475,12 +524,44 @@ def health():
         "vllm_model": settings.VLLM_MODEL or None,
         "fallback_to_dummy": settings.FALLBACK_TO_DUMMY,
     }
+'''
+@app.get("/health")
+def health():
+    """진단용(공개) — 두 축 토글 + 실제 활성 백엔드 + 인증 설정 요약.
 
+    이전 버전은 analyzer 가 vllm 이 아닐 때 provider_name 이 정의되지 않아
+    NameError 로 500 이 났다(= 배포 헬스체크 실패). 항상 초기화하도록 수정.
+    """
+    analyzer = get_analyzer()
+    provider_name = None
+    provider_url = None
+    if analyzer.name == "vllm":
+        provider_name = getattr(analyzer, "provider_name", settings.VLLM_PROVIDER)
+        try:
+            provider_url = analyzer.endpoint().base_url  # type: ignore[attr-defined]
+        except Exception:
+            provider_url = settings.VLLM_BASE_URL or None
+
+    return {
+        "status": "ok",
+        "analyzer_backend": settings.ANALYZER_BACKEND,   # 설정값
+        "active_analyzer": _analyzer.name,         # 실제 활성(폴백 반영)
+        "vllm_provider": settings.VLLM_PROVIDER,           # 설정값
+        "vllm_provider_resolved": provider_name or None,
+        "vllm_base_url": provider_url,
+        "vllm_model": settings.VLLM_MODEL or None,
+        "fallback_to_dummy": settings.FALLBACK_TO_DUMMY,
+        "auth": auth_status(),
+    }
 
 @app.get("/api/_debug/analyze")
-def debug_analyze(text: str = "오늘은 조금 지치고 불안했지만 그래도 버텼다."):
+def debug_analyze(text: str = "오늘은 조금 지치고 불안했지만 그래도 버텼다.",
+                  user: CurrentUser = Depends(require_user)):
     """실제 analyzer.analyze() 를 한 번 호출해 원시 결과/에러를 그대로 반환 (진단용).
-    현재 토글 경로를 그대로 탄다. 폴백 없이 raw 를 보고 싶을 때."""
+    현재 토글 경로를 그대로 탄다. 폴백 없이 raw 를 보고 싶을 때.
+    프로덕션에서는 노출하지 않는다(내부 오류 메시지가 그대로 나가므로)."""
+    if auth_settings.is_production:
+        raise HTTPException(status_code=404, detail="Not Found")
     analyzer = build_analyzer()
     try:
         raw = analyzer.analyze(text)
@@ -493,9 +574,10 @@ def debug_analyze(text: str = "오늘은 조금 지치고 불안했지만 그래
 async def analyze_diary(
     audio_file: UploadFile | None = File(None),
     text_data: str | None = Form(None),
+    user: CurrentUser = Depends(user_rate_limit("analyze", auth_settings.RL_LLM_PER_MIN)),
 ):
-    """일기(text/audio) → 5감정 + dominant + keywords + crisis_score
-    응답 규격 = 프론트 emotionStore / api-types.ts 와 1:1.
+    """일기(text/audio) → 7감정 + dominant + keywords + crisis_score
+    응답 규격 = 프론트 diaryStore(7감정) / lib/api.ts 와 1:1.
     analyzer.analyze() 우선, 실패 시 휴리스틱 폴백."""
     extracted_text = text_data or ""
 
@@ -529,7 +611,10 @@ async def analyze_diary(
 
 
 @app.post("/api/momo/reply", response_model=MomoReplyResponse)
-async def momo_reply(req: MomoReplyRequest):
+async def momo_reply(
+    req: MomoReplyRequest,
+    user: CurrentUser = Depends(user_rate_limit("momo", auth_settings.RL_LLM_PER_MIN)),
+):
     """모모 공감 답장 — RAG(과거 일기 context) + 감정 주입 → analyzer.generate(); 실패 시 휴리스틱."""
     crisis = heuristic_crisis(req.text)
     escalate = crisis >= 0.6
@@ -541,14 +626,21 @@ async def momo_reply(req: MomoReplyRequest):
         parts.append("과거 기록(참고):\n" + "\n".join(f"- {c}" for c in req.context[:3]))
     if req.emotions:
         e = req.emotions
-        parts.append(f"현재 감정비율 pos{e.pos}/calm{e.calm}/ten{e.ten}/sad{e.sad}/emp{e.emp}")
+        parts.append(
+            f"현재 감정비중 기쁨{e.joy}/차분{e.calm}/사랑{e.love}/슬픔{e.sad}/"
+            f"분노{e.anger}/긴장{e.tension}/공허{e.empty}"
+        )
     if req.history:
         parts.append("직전 대화:\n" + "\n".join(req.history[-6:]))
     parts.append(f"사용자: {req.text}")
-    if escalate:
+    if escalate and req.isLinkAgreed:
         parts.append("(위기 신호 감지됨 — 위로 후 전문가 연계를 부드럽게 권할 것)")
 
-    reply = await asyncio.to_thread(_gen_text, PROMPT_MOMO_SYSTEM, "\n\n".join(parts))
+    # reply = await asyncio.to_thread(_gen_text, PROMPT_MOMO_SYSTEM, "\n\n".join(parts))
+    reply = await asyncio.to_thread(
+        _gen_text_momo, PROMPT_MOMO_SYSTEM, "\n\n".join(parts),
+        call_type="momo_reply", session_id=req.session_id,
+    )
     if not reply:
         if escalate:
             reply = "많이 힘들었구나. 지금은 저보다 전문가의 도움이 필요한 순간 같아요. 비대면 상담을 연결해 드릴까요?"
@@ -558,8 +650,40 @@ async def momo_reply(req: MomoReplyRequest):
             reply = "그 마음 충분히 그럴 수 있어. 오늘은 작은 한 걸음만 같이 떠올려보자."
     return MomoReplyResponse(reply=reply.strip(), escalate=escalate)
 
+
+PROMPT_MOMO_DIARY = (
+    "너는 사용자의 하루 대화를 바탕으로 '1인칭 일기'를 써주는 도우미다.\n"
+    "- 사용자(me) 발화를 중심으로 오늘 있었던 일과 감정을 '나는…' 1인칭으로.\n"
+    "- 모모 말은 참고만 하고 그대로 옮기지 말 것. 2~4문장, 담백하게. 본문만."
+)
+@app.post("/api/momo/diary", response_model=MomoDiaryResponse)
+async def momo_diary(
+    req: MomoDiaryRequest,
+    user: CurrentUser = Depends(user_rate_limit("momo", auth_settings.RL_LLM_PER_MIN)),
+):
+    """당일 모모 대화 → 1인칭 일기 본문. 프론트 chatToDiary() 계약."""
+    # def who(m): return "me" if (m.who or m.role or "").lower() in ("me", "user") else "momo"
+    def who(m): return "me"
+    def txt(m): return (m.text or m.content or "").strip()
+
+    lines = [f"{who(m)}: {txt(m)}" for m in req.messages if txt(m)]
+    if not lines:
+        return MomoDiaryResponse(diary="")
+    # body = await asyncio.to_thread(_gen_text, PROMPT_MOMO_DIARY, "\n".join(lines))
+    body = await asyncio.to_thread(
+        _gen_text_momo, PROMPT_MOMO_DIARY, "\n".join(lines),
+        call_type="momo_diary", session_id=req.session_id,
+    )
+    if not body:  # LLM 실패 → 사용자 발화 이어붙이기 (프론트 폴백과 동일)
+        body = " ".join(txt(m) for m in req.messages if who(m) == "me" and txt(m))
+    # 대화 마무리 시점 — 이 세션의 턴 지표를 집계해 요약 출력(모모챗 전용, vLLM 일 때만 데이터 있음)
+    log_session_summary(req.session_id)
+    return MomoDiaryResponse(diary=body.strip())
+
+
 @app.post("/api/embed", response_model=EmbedResponse)
-def embed(req: EmbedRequest):
+def embed(req: EmbedRequest,
+          user: CurrentUser = Depends(user_rate_limit("embed", 60))):
     """RAG 임베딩 — embed_text() 단일 경로 사용. 미설정/실패면 None(프론트 폴백 검색)."""
     v = embed_text(req.text)
     return EmbedResponse(embedding=v, dim=len(v) if v else 0)
@@ -578,7 +702,8 @@ PROMPT_REFLECT = (
 
 
 @app.post("/api/reflect", response_model=ReflectResponse)
-def reflect(req: ReflectRequest):
+def reflect(req: ReflectRequest,
+            user: CurrentUser = Depends(user_rate_limit("reflect", 10))):
     """최근 일기 → 사실/성향 요약·구조화 사실·관계 추출
     analyzer.generate() 로 JSON 유도 후 파싱. 실패/미설정이면 기존 값 유지."""
     import json
@@ -624,7 +749,8 @@ def reflect(req: ReflectRequest):
 
 
 @app.post("/api/crisis/check", response_model=CrisisCheckResponse)
-async def crisis_check(req: CrisisCheckRequest):
+async def crisis_check(req: CrisisCheckRequest,
+                       user: CurrentUser = Depends(require_user)):
     score = heuristic_crisis(req.text)
     return CrisisCheckResponse(
         risk_score=score,
@@ -634,7 +760,8 @@ async def crisis_check(req: CrisisCheckRequest):
 
 
 @app.post("/api/vision", response_model=VisionResponse)
-async def vision(photo: UploadFile = File(...)):
+async def vision(photo: UploadFile = File(...),
+                 user: CurrentUser = Depends(user_rate_limit("vision", 10))):
     """멀티모달 사진 분석 — 사진 속 장면·분위기를 일기 맥락으로.
     analyzer.analyze_image() 사용. 백엔드가 vision 미지원이거나 실패하면 스탑."""
     import base64
@@ -647,7 +774,7 @@ async def vision(photo: UploadFile = File(...)):
         mime = photo.content_type or "image/jpeg"
         d = analyzer.analyze_image(mime, b64)
         eh = d.get("emotion_hint")
-        if eh not in ("bloom", "calm", "tense", "wither", "void"):
+        if eh not in EMOTION_LABELS:   # 7감정 라벨 중 하나만 허용
             eh = None
         return VisionResponse(
             labels=[str(x) for x in (d.get("labels") or [])][:5] or ["사진"],
@@ -670,7 +797,8 @@ PROMPT_WEEKLY = (
 
 
 @app.post("/api/weekly", response_model=WeeklyAIResponse)
-def weekly(req: WeeklyReq):
+def weekly(req: WeeklyReq,
+           user: CurrentUser = Depends(user_rate_limit("weekly", 10))):
     """이번 주 일기 → AI 회고 요약 + 추천. 미설정/일기 없으면 기본 문구."""
     import json
 
@@ -697,8 +825,16 @@ def weekly(req: WeeklyReq):
 
 
 @app.get("/api/weekly/{uid}", response_model=WeeklyReviewResponse)
-async def weekly_review(uid: str):
-    """주간 리뷰 (집계형 스텁 — 실제 AI 요약은 POST /api/weekly 사용)."""
+async def weekly_review(uid: str, user: CurrentUser = Depends(require_user)):
+    """주간 리뷰 (집계형 스텁 — 실제 AI 요약은 POST /api/weekly 사용).
+
+    경로의 uid 를 그대로 믿으면 남의 데이터를 열 수 있다(IDOR).
+    토큰 주인과 일치할 때만 허용하고, 'me' 는 본인 별칭으로 받는다."""
+    if uid not in ("me", user.id):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "forbidden", "message": "다른 사용자의 데이터에는 접근할 수 없습니다."},
+        )
     return WeeklyReviewResponse(
         summary="POST /api/weekly 로 AI 요약을 생성하세요.",
         dominant="calm",
@@ -708,7 +844,8 @@ async def weekly_review(uid: str):
 
 
 @app.post("/api/insights")
-async def insights(extracted_text: str = Form("")):
+async def insights(extracted_text: str = Form(""),
+                   user: CurrentUser = Depends(user_rate_limit("analyze", auth_settings.RL_LLM_PER_MIN))):
     """텍스트 → 분석기 결과(감정·관계) 반환.
     Phase 5 목표는 집계·차분 프라이버시 기반 B2B 인사이트(개인 식별 불가)이며, 현재는
     단일 텍스트 분석 결과를 그대로 내려주는 단계.

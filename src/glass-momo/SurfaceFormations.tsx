@@ -181,6 +181,44 @@ function BranchMesh({ branch, seed, idx }: { branch: BranchKey; seed: number; id
       </mesh>
     );
   }
+  if (branch === "love") {
+    // 사랑: 분홍 유리 하트빛 구
+    return (
+      <mesh position={[0, 0.1, 0]}>
+        <sphereGeometry args={[0.1, 12, 12]} />
+        <meshPhysicalMaterial
+          color={"#f7b0d4"}
+          roughness={0.08}
+          transmission={0.8}
+          thickness={0.5}
+          ior={1.4}
+          transparent
+          emissive={"#e87fb8"}
+          emissiveIntensity={0.3}
+          envMapIntensity={1.2}
+        />
+      </mesh>
+    );
+  }
+  if (branch === "rage") {
+    // 분노: 붉게 타오르는 날카로운 스파이크
+    return (
+      <mesh position={[0, 0.18, 0]}>
+        <coneGeometry args={[0.07, 0.36, 5]} />
+        <meshPhysicalMaterial
+          color={"#f0946a"}
+          roughness={0.05}
+          transmission={0.5}
+          thickness={0.6}
+          ior={1.35}
+          transparent
+          emissive={"#e8744e"}
+          emissiveIntensity={0.45}
+          envMapIntensity={1.2}
+        />
+      </mesh>
+    );
+  }
   // void: 떠다니는 파편
   const lift = 0.1 + seed * 0.15;
   return (

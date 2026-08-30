@@ -36,6 +36,11 @@ venv/
 *.sw?
 
 #test files
-backend/Test/
+backend/Test/*
+
+!backend/Test/locustTest.py
 
 GUIDE_MARKDOWN/
+
+# vllm 모델 성능 비교 파일
+momo_metrics.py

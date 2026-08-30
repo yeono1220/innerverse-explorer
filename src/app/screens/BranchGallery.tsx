@@ -1,15 +1,17 @@
-// 27 · 5갈래 진화 갤러리 (만개/평온/긴장/시듦/공허)
+// 27 · 7갈래 진화 갤러리 (만개/평온/애정/긴장/분노/시듦/공허)
 import { useNavigate } from "react-router-dom";
 import { StatusBar, AppBar, Body } from "../ui/layout";
 import { Card, CapLabel } from "../ui/primitives";
 import { Planet2D } from "../ui/planet";
 
 const BRANCHES = [
-  { key: "bloom", color: "green" as const, name: "만개", desc: "긍정이 가득 쌓여 숲이 피어남", trigger: "기쁨/차분 비율 50%↑" },
-  { key: "calm", color: "blue" as const, name: "평온", desc: "잔잔한 마음이 결정처럼 빛남", trigger: "기본값 (지배 감정 없음)" },
-  { key: "tense", color: "amber" as const, name: "긴장", desc: "날카로운 마음이 가시로 돋음", trigger: "긴장 비율 34%↑" },
-  { key: "wither", color: "void" as const, name: "시듦", desc: "슬픔이 쌓여 메말라감", trigger: "슬픔 비율 34%↑" },
-  { key: "void", color: "void" as const, name: "공허", desc: "비어있는 마음, 파편만 떠다님", trigger: "공허 비율 38%↑" },
+  { key: "bloom", color: "green" as const, name: "만개", desc: "기쁨이 가득 쌓여 숲이 피어남", trigger: "기쁨이 대표 감정일 때" },
+  { key: "calm", color: "blue" as const, name: "평온", desc: "잔잔한 마음이 결정처럼 빛남", trigger: "차분이 대표 감정일 때" },
+  { key: "love", color: "love" as const, name: "애정", desc: "따뜻한 사랑이 꽃빛으로 물듦", trigger: "사랑이 대표 감정일 때" },
+  { key: "tense", color: "amber" as const, name: "긴장", desc: "날카로운 마음이 가시로 돋음", trigger: "긴장이 대표 감정일 때" },
+  { key: "rage", color: "amber" as const, name: "분노", desc: "뜨거운 마음이 붉게 타오름", trigger: "분노가 대표 감정일 때" },
+  { key: "wither", color: "void" as const, name: "시듦", desc: "슬픔이 쌓여 메말라감", trigger: "슬픔이 대표 감정일 때" },
+  { key: "void", color: "void" as const, name: "공허", desc: "비어있는 마음, 파편만 떠다님", trigger: "공허가 대표 감정일 때" },
 ];
 
 export default function BranchGallery() {
@@ -17,13 +19,13 @@ export default function BranchGallery() {
   return (
     <>
       <StatusBar />
-      <AppBar back title="5분기 진화" />
+      <AppBar back title="7분기 진화" />
       <Body>
         <div style={{ textAlign: "center" }}>
           <CapLabel>EVOLUTION BRANCHES</CapLabel>
           <h2 style={{ fontSize: 21, fontWeight: 800, marginTop: 6 }}>감정이 행성을 빚어요</h2>
           <p style={{ fontSize: 12.5, color: "var(--iv-txt2)", marginTop: 6, lineHeight: 1.6 }}>
-            누적된 감정의 지배 비율에 따라 행성은 다섯 갈래로 진화해요.
+            누적된 대표 감정의 비율에 따라 행성은 일곱 갈래로 진화해요.
           </p>
         </div>
 

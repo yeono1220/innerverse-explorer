@@ -1,4 +1,5 @@
 """
+Modal에 vLLM을 OpenAI 호환 서버로 띄우는 배포 스크립트.
 Baseline vLLM(단일 GPU) + Speculative Decoding 을 Modal 에 띄우는 배포 스크립트.
 
 목적:
@@ -36,6 +37,8 @@ Baseline vLLM(단일 GPU) + Speculative Decoding 을 Modal 에 띄우는 배포 
 ━━━ 반드시 알아둘 제약 ━━━
   1) draft 와 target 은 '같은 토크나이저/vocab' 이어야 한다.
      → Qwen3-0.6B ↔ Qwen3-8B 는 동일 계열이라 OK. 서로 다른 계열 섞으면 안 됨.
+     동일계열 : {0.6B, 1.7B, 8B}. 이중 0.6B가 가장 GPU 메모리 차지 않하고 파라미터 적음
+     ⚠️ 여유 있다면 acceptance rate까지 고려하기 위해 1.7B와 비교하기
   2) draft 모델도 같은 GPU 에 올라간다(가중치+KV 추가). 8B + 0.6B 가 L4 에 빠듯하면
      VLLM_MAX_MODEL_LEN 이나 VLLM_GPU_UTIL 을 낮춘다. (OOM 은 util 을 '낮춰서' 해결)
   3) draft-model 방식이 V1 엔진에서 에러나면 VLLM_USE_V1=0 으로 배포(V0 는 검증된 경로).
@@ -52,7 +55,9 @@ import modal
 # target(=실제 서빙) 모델. backend 의 VLLM_MODEL 과 일치해야 한다.
 MODEL = os.environ.get("VLLM_MODEL", "Qwen/Qwen3-8B")
 GPU = os.environ.get("VLLM_GPU", "L4")
+# 동시 요청 여유. vLLM 이 배칭하므로 1 컨테이너가 여러 요청 처리 가능.
 MAX_CONCURRENT = int(os.environ.get("VLLM_MAX_CONCURRENT", "10"))
+# 유휴 시 컨테이너 유지 시간(초). 짧으면 비용↓ 콜드스타트↑.
 SCALEDOWN_WINDOW = int(os.environ.get("VLLM_SCALEDOWN", "300"))
 API_KEY = os.environ.get("MODAL_VLLM_TOKEN", "")
 MAX_MODEL_LEN = os.environ.get("VLLM_MAX_MODEL_LEN", "16384")
@@ -98,11 +103,17 @@ if VLLM_USE_V1:  # 비어있지 않을 때만 강제(빈 문자열을 굽지 않
 
 vllm_image = (
     modal.Image.debian_slim(python_version="3.12")
-    .pip_install(
-        "vllm==0.9.1",                       # Qwen3 지원(≥0.8.5). --speculative-config JSON 방식.
-        "huggingface_hub[hf_transfer]",
-    )
-    .env(_img_env)
+    # .pip_install("vllm==0.6.3", "huggingface_hub[hf_transfer]==0.26.2") # Qwen3-8B 로드를 위해 vllm 버전 수정 필요
+    # ===== FIX: transformers 핀 고정 — vllm 0.9.1 이 aimv2 를 직접 등록하는데
+    #   transformers>=4.54.0 이 aimv2 를 내장하면서 충돌("already used") → import 단계에서 죽음.
+    #   vllm<=0.10.0 은 transformers<4.54.0 필요. 4.51.3 = Qwen3 지원 + 커뮤니티 검증된 안전값.
+    #   기존: .pip_install("vllm==0.9.1", "huggingface_hub[hf_transfer]")
+    # --- FIX2: [hf_transfer] 제거 → huggingface_hub 가 hf_xet(Xet 가속)을 자동 포함 (deprecated 회피)
+    .pip_install("vllm==0.9.1", "transformers==4.51.3", "huggingface_hub")
+    # ===== /FIX =====
+    # --- FIX2: HF_HUB_ENABLE_HF_TRANSFER 제거 (deprecated 경고). hf_xet 설치 시 Xet 이 기본 활성
+    #   (adaptive concurrency)이라 env 불필요. HF_XET_HIGH_PERFORMANCE=1 은 16GB 버퍼·RAM 64GB 요구 →
+    #   L4 기본 컨테이너에선 호스트 RAM OOM 위험이라 일부러 안 켬 (필요하면 memory=65536+ 후 추가).
 )
 
 # 모델 가중치 캐시용 볼륨 — target/draft 재다운로드 방지
@@ -166,6 +177,7 @@ def build_vllm_args() -> list[str]:
 )
 @modal.concurrent(max_inputs=MAX_CONCURRENT)
 @modal.web_server(port=VLLM_PORT, startup_timeout=60 * 10)
+#  ⚠️ 모든 웹 함수는 요청당 150초 하드 HTTP 타임아웃 강제(별도 지정 불가)
 def serve():
     """단일 vLLM 인스턴스(:8000)를 SPEC_METHOD 에 맞춰 띄운다.
     외부 접근: https://<...>.modal.run/v1/chat/completions
@@ -173,7 +185,7 @@ def serve():
     import subprocess
 
     cmd = build_vllm_args()
-    print(f"[modal_vllm] SPEC_METHOD={SPEC_METHOD} 기동:", " ".join(cmd))
+    print(f"[vllm] SPEC_METHOD={SPEC_METHOD} 기동:", " ".join(cmd))
     # ✅ 리스트 그대로, shell=False. (VLLM_USE_V1 등은 이미 컨테이너 env 에 구워져 있어 상속됨)
     subprocess.Popen(cmd)
 
@@ -185,11 +197,18 @@ def main(prompt: str = ""):
     """배포된 서버에 붙어보는 스모크 테스트. (this runs on your machine)"""
     import urllib.request
 
+    from dotenv import load_dotenv
+    load_dotenv(".env.local", override=True)
+
     base = os.environ.get("MODAL_VLLM_URL", "").rstrip("/")
     if not base:
-        print("MODAL_VLLM_URL 환경변수를 먼저 설정하세요 (배포 시 나온 URL).")
-        print("예: export MODAL_VLLM_URL=https://<you>--innerverse-vllm-serve.modal.run")
-        return
+        try:
+            base = modal.Function.from_name("innerverse-vllm", "serve").get_web_url().rstrip("/")
+            print(f"[modal_vllm] MODAL_VLLM_URL 자동 조회 -> {base}")
+        except Exception as e:
+            print("MODAL_VLLM_URL 환경변수를 먼저 설정하세요 (배포 시 나온 URL).")
+            print("예: export MODAL_VLLM_URL=https://<you>--innerverse-vllm-serve.modal.run")
+            return
     if not base.endswith("/v1"):
         base += "/v1"
 

@@ -1,5 +1,6 @@
-// 디오라마 — 행성 톤 프리셋 + 감정→구조물 매핑
-import type { EmoKey } from "@/glass-momo/constants";
+// 디오라마 — 행성 톤 프리셋 + 감정→구조물 매핑 (7감정)
+import { SLUG_OF, type Emo7 } from "@/glass-momo/constants";
+import type { EmotionLabel } from "@/store/diaryStore";
 
 export interface PlanetTone {
   hi: string;
@@ -23,27 +24,27 @@ export const TONE_PRESETS: Record<ToneKey, PlanetTone> = {
 // 일기 감정 → 행성 위 구조물 1종 매핑.
 // 사용자가 일기를 쓸 때마다 행성 어딘가에 작은 건축물이 자라남.
 export type StructureType =
-  | "flowerTree"   // 기쁨/사랑 — 줄기+잎+꽃 한 송이
+  | "flowerTree"   // 기쁨 — 줄기+잎+꽃 한 송이
   | "stoneStack"   // 차분 — 3단 돌탑
-  | "clockTower"   // 긴장/분노 — 시계탑
+  | "heartBloom"   // 사랑 — 분홍 하트꽃잎 꽃송이
   | "gravestone"   // 슬픔 — 둥근 비석
+  | "emberSpike"   // 분노 — 크게 터지는 폭죽
+  | "clockTower"   // 긴장 — 시계탑
   | "emptyCage";   // 공허 — 빈 새장
 
-export const EMOTION_TO_STRUCTURE: Record<EmoKey, StructureType> = {
-  pos: "flowerTree",
+export const EMOTION_TO_STRUCTURE: Record<Emo7, StructureType> = {
+  joy: "flowerTree",
   calm: "stoneStack",
-  ten: "clockTower",
+  love: "heartBloom",
   sad: "gravestone",
-  emp: "emptyCage",
+  anger: "emberSpike",
+  tension: "clockTower",
+  empty: "emptyCage",
 };
 
-// diaryStore의 한글 감정 → emotionStore의 EmoKey
-export function emotionLabelToKey(label: string): EmoKey {
-  if (label === "기쁨" || label === "사랑") return "pos";
-  if (label === "차분") return "calm";
-  if (label === "긴장" || label === "분노") return "ten";
-  if (label === "슬픔") return "sad";
-  return "emp";
+// diaryStore의 한글 감정 라벨 → 감정 슬러그(Emo7). 구조물 선택 등에 사용.
+export function emotionLabelToKey(label: string): Emo7 {
+  return SLUG_OF[label as EmotionLabel] ?? "calm";
 }
 
 export const PLANET_RADIUS = 1.6;

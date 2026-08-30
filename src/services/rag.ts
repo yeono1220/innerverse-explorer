@@ -27,8 +27,9 @@ export async function ragContext(text: string, k = 3): Promise<MemoryHit[]> {
       const { data } = await getSupabase().rpc("match_diaries", { query_embedding: vec, match_count: k });
       const rows = (data as MatchRow[] | null) ?? [];
       if (rows.length) {
+        // 과거 raw 차단: 모델엔 원문 대신 '날짜·감정' 포인터만. 과거 내용은 요약(③④)으로만 참조.
         return rows.map((r) => ({
-          snippet: `${r.date ?? ""} (${r.primary_label ?? ""}): ${(r.body ?? "").slice(0, 90)}`,
+          snippet: `${r.date ?? ""}에 '${r.primary_label ?? ""}' 감정의 기록이 있었어`,
           preview: `${r.date ?? ""} · ${r.primary_label ?? ""}`,
         }));
       }
@@ -41,7 +42,8 @@ export async function ragContext(text: string, k = 3): Promise<MemoryHit[]> {
   try {
     const recent = await listDiaryEntries();
     return recent.slice(0, k).map((d) => ({
-      snippet: `${d.date} (${d.primary}): ${d.body.slice(0, 90)}`,
+      // 과거 raw 차단: 원문 미포함(날짜·감정 포인터만)
+      snippet: `${d.date}에 '${d.primary}' 감정의 기록이 있었어`,
       preview: `${d.date} · ${d.primary}`,
     }));
   } catch {

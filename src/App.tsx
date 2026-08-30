@@ -18,7 +18,7 @@ import DiaryWrite from "./app/screens/DiaryWrite";
 import EmotionResult from "./app/screens/EmotionResult";
 import DiaryDetail from "./app/screens/DiaryDetail";
 import Empty from "./app/screens/Empty";
-import MomoChat from "./app/screens/MomoChat";
+import MomoChat from "./app/screens/Momochat";
 import DiaryComplete from "./app/screens/DiaryComplete";
 import Attendance from "./app/screens/Attendance";
 import Quest from "./app/screens/Quest";

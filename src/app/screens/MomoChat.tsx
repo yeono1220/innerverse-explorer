@@ -22,7 +22,9 @@ const SUGGESTIONS = ["조금 무기력해", "오늘 좀 신났어", "긴장돼�
 
 const REPLIES: Array<{ keys: RegExp; reply: string; emo: EmotionLabel }> = [
   { keys: /무기력|공허|텅|허무/, reply: "텅 빈 느낌이 들었구나. 그런 날엔 무언가 안 해도 괜찮아.", emo: "공허" },
-  { keys: /신났|기뻤|좋았|행복/, reply: "와, 좋은 일이 있었구나! 그 기억 오래 머물게 해줄게 ✨", emo: "기쁨" },
+  { keys: /사랑|보고싶|그리워|애틋|설레|따뜻/, reply: "따뜻한 마음이 번졌구나. 그 온기 오래 간직해 🌸", emo: "사랑" },
+  { keys: /신났|기뻤|좋았|행복|뿌듯/, reply: "와, 좋은 일이 있었구나! 그 기억 오래 머물게 해줄게 ✨", emo: "기쁨" },
+  { keys: /화가|화났|짜증|억울|열받|분노/, reply: "많이 화났겠다. 그럴 만했어. 그 감정도 네 마음의 신호야.", emo: "분노" },
   { keys: /불안|긴장|초조|걱정/, reply: "긴장됐겠다. 호흡 한번 같이 해볼까? 들이쉬고… 천천히 내쉬고.", emo: "긴장" },
   { keys: /슬|눈물|외|지쳤|아프/, reply: "많이 무거웠지. 내가 곁에 있어. 천천히 얘기해줘.", emo: "슬픔" },
   { keys: /평범|괜찮|담담|쉬/, reply: "잔잔한 하루였구나. 그 결도 행성 위에 차곡차곡 쌓일 거야 🌿", emo: "차분" },
@@ -36,6 +38,16 @@ export default function MomoChat() {
   const [input, setInput] = useState("");
   const [careOpen, setCareOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // 모모챗 세션 id — vLLM 성능 9지표 로깅을 이 대화에 귀속시키기 위함(마운트당 1개)
+  const sessionRef = useRef<string>("");
+  if (!sessionRef.current) {
+    sessionRef.current =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `momo-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+  }
+  const sessionId = sessionRef.current;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -67,6 +79,7 @@ export default function MomoChat() {
       context: hits.map((h) => h.snippet),
       history,
       profile: memoryPromptBlock(mem),
+      session_id: sessionId,
     });
     if (r?.reply) reply = r.reply;
     if (r?.escalate) window.setTimeout(() => setCareOpen(true), 700);
@@ -84,7 +97,7 @@ export default function MomoChat() {
         back
         title="모모와 대화"
         right={
-          <IconButton onClick={() => nav("/momo/complete", { state: { msgs } })} ariaLabel="일기로 완성">
+          <IconButton onClick={() => nav("/momo/complete", { state: { msgs, sessionId } })} ariaLabel="일기로 완성">
             ✓
           </IconButton>
         }
