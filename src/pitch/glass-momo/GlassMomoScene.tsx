@@ -32,33 +32,4 @@ export function GlassMomoScene() {
         <p>
           모모는 <b>유리</b>, 행성은 <b>결정면 디오라마</b>예요. 아래 감정 버튼으로 마음을 쌓아보세요.{" "}
           <b>긍정이 쌓이면 씨앗→숲으로 피어나고</b>, 부정·공허가 쌓이면{" "}
-          <b>전혀 다른 행성</b>으로 갈라집니다. 드래그로 돌려보세요.
-        </p>
-      </div>
-
-      <div className="iv-phone">
-        <div className="iv-notch" />
-        <div className="iv-screen">
-          <div className="iv-canvas-host">
-            <Scene />
-          </div>
-
-          <div className={`iv-loading${loaded ? " hide" : ""}`}>
-            <div className="iv-ring" />
-            <div className="iv-t">유리 우주를 빚는 중…</div>
-          </div>
-
-          <div className="iv-overlay">
-            <StatusBar />
-            <TopBar />
-            <EmotionMeter />
-            <ModeToggle />
-            <OutcomeBanner />
-            <SpeechBubble />
-            <EmotionDock />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+          <b>전혀 다른 행성</b>으로 갈라집니다. 드래그로 

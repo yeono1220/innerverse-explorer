@@ -3,16 +3,16 @@
 import * as THREE from "three";
 
 export const planetRot = {
-  x: 0,
+  x: 0, //0.12
   y: 0,
-  velX: 0,
+  velX: 0, //0.0016
   dragging: false,
 };
 
 export function resetPlanetRot() {
-  planetRot.x = 0;
+  planetRot.x = 0; //0.12
   planetRot.y = 0;
-  planetRot.velX = 0;
+  planetRot.velX = 0; //0.0016
 }
 
 export const sharedRefs = {

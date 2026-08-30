@@ -502,7 +502,6 @@ async def _run_analysis(text: str) -> dict:
 '''
 @app.get("/health")
 def health():
-    """진단용 — 현재 두 축 토글과 실제 활성 백엔드(폴백 반영)"""
     provider_name = None
     provider_url = None
     if settings.ANALYZER_BACKEND == "vllm":
