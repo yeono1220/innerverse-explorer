@@ -1,25 +1,30 @@
 // 09 · 출석 보상 (14일 캘린더)
 import { StatusBar, AppBar, Body } from "../ui/layout";
 import { Card, Button, CapLabel } from "../ui/primitives";
-import { useUserStore, todayStr } from "@/store/userStore";
-import { useAppStore } from "@/store/appStore";
-
-const REWARDS = [3, 3, 5, 5, 8, 8, 10, 10, 12, 12, 15, 15, 20, 30];
+import { useUserStore, REWARDS, todayStr, dayDiff } from "@/store/userStore";
 
 export default function Attendance() {
   const streak = useUserStore((s) => s.streak);
   const stardust = useUserStore((s) => s.stardust);
-  const claimDailyReward = useUserStore((s) => s.claimDailyReward);
   const lastCheckIn = useUserStore((s) => s.lastCheckIn);
-  const attendance = useAppStore((s) => s.attendance);
+  const claimDailyReward = useUserStore((s) => s.claimDailyReward);
 
-  const reward = REWARDS[Math.min(streak, REWARDS.length - 1)] ?? 5;
-  const claimedToday = lastCheckIn === todayStr();
+  // 오늘 날짜(로컬) 기준으로 실제 연속 출석 상태를 계산한다.
+  const todayKey = todayStr();
+  const gap = lastCheckIn ? dayDiff(lastCheckIn, todayKey) : Infinity;
+  const claimedToday = gap === 0; // 오늘 이미 수령
+  // 하루라도 걸렀으면(간격 2일 이상) 스트릭은 끊긴 것 → 0 (= 오늘이 첫날)
+  const currentStreak = gap === 0 || gap === 1 ? streak : 0;
+  const completedCount = currentStreak; // ✓ 로 채워진 칸 수
+  // 강조할 "오늘" 칸: 이미 받았으면 방금 채운 칸, 아니면 다음에 받을 칸
+  const todayIndex = claimedToday ? Math.max(0, currentStreak - 1) : currentStreak;
+  // 오늘이 며칠째인지(1~14)와 그에 해당하는 보상
+  const todayDay = claimedToday ? currentStreak : currentStreak + 1;
+  const reward = REWARDS[Math.min(Math.max(todayDay - 1, 0), REWARDS.length - 1)] ?? 5;
 
-  // 하루 1회만: 오늘 이미 받았으면 무시하고, 버튼도 disabled 처리.
+  // 하루 1회만: 오늘 이미 받았으면 무시. 연속/리셋 판정은 store가 처리.
   const claim = () => {
-    if (claimedToday) return;
-    claimDailyReward(reward);
+    if (!claimedToday) claimDailyReward();
   };
 
   return (
@@ -29,18 +34,18 @@ export default function Attendance() {
       <Body>
         <div style={{ textAlign: "center" }}>
           <CapLabel>STREAK</CapLabel>
-          <h2 style={{ fontSize: 26, fontWeight: 800, marginTop: 6 }}>{streak}일 연속</h2>
+          <h2 style={{ fontSize: 26, fontWeight: 800, marginTop: 6 }}>{currentStreak}일 연속</h2>
           <p style={{ fontSize: 12.5, color: "var(--iv-txt2)", marginTop: 6 }}>
-            별조각 {stardust}개 · 내일 보상 +{REWARDS[Math.min(streak, REWARDS.length - 1)] ?? 5}
+            별조각 {stardust}개 · {claimedToday ? "오늘 출석 완료 ✓" : `오늘 보상 +${reward}`}
           </p>
         </div>
 
         <Card>
           <div className="iv-section-h">14일 캘린더</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 8, width: "100%", minWidth: 0, boxSizing: "border-box" }}>
             {Array.from({ length: 14 }).map((_, i) => {
-              const done = attendance.includes(i);
-              const today = i === streak;
+              const done = i < completedCount;
+              const isToday = i === todayIndex;
               return (
                 <div
                   key={i}
@@ -50,7 +55,7 @@ export default function Attendance() {
                     background: done
                       ? "linear-gradient(135deg,#5fc88a55,#5fc88a22)"
                       : "rgba(255,255,255,.03)",
-                    border: today
+                    border: isToday
                       ? "1px solid var(--iv-purple2)"
                       : "1px solid var(--iv-line)",
                     display: "flex",

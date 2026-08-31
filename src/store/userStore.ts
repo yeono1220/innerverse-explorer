@@ -28,7 +28,7 @@ interface UserState {
   setProfile: (name: string, color: PlanetColor) => void;
   setPlanetName: (name: string) => void;
   earnStardust: (n: number) => void;
-  claimDailyReward: (amount: number) => boolean; // 하루 1회만 수령; 이미 받았으면 false
+  claimDailyReward: () => boolean; // 하루 1회만 수령(연속/리셋 관리); 이미 받았으면 false
   hydrate: (p: Partial<Persisted>) => void;
 }
 
@@ -40,6 +40,16 @@ export function todayStr(): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${m}-${day}`;
+}
+
+// 14일 출석 보상 테이블 (연속 1~14일차). 화면과 store가 공유하는 단일 출처.
+export const REWARDS = [3, 3, 5, 5, 8, 8, 10, 10, 12, 12, 15, 15, 20, 30];
+
+// 두 YYYY-MM-DD(로컬) 날짜 사이의 정수 일수 차이. UTC 자정 기준이라 DST 영향 없음.
+export function dayDiff(fromStr: string, toStr: string): number {
+  const [fy, fm, fd] = fromStr.split("-").map(Number);
+  const [ty, tm, td] = toStr.split("-").map(Number);
+  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86400000);
 }
 
 interface Persisted {
@@ -126,11 +136,19 @@ export const useUserStore = create<UserState>((set, get) => {
       set({ stardust: get().stardust + n });
       persist();
     },
-    // 하루 1회 출석 보상. 오늘 이미 받았으면 아무것도 안 하고 false 반환.
-    claimDailyReward: (amount) => {
+    // 하루 1회 출석 보상 + 연속(스트릭) 관리.
+    // - 오늘 이미 받았으면 false.
+    // - 어제 출석했으면 스트릭 +1 (14 넘으면 새 주기 1일차로 순환).
+    // - 하루라도 걸렀거나 첫 출석이면 오늘을 "1일차"로 리셋.
+    claimDailyReward: () => {
       const today = todayStr();
-      if (get().lastCheckIn === today) return false;
-      set({ stardust: get().stardust + amount, lastCheckIn: today });
+      const s = get();
+      if (s.lastCheckIn === today) return false; // 오늘은 이미 수령함
+      const gap = s.lastCheckIn ? dayDiff(s.lastCheckIn, today) : Infinity;
+      const continues = gap === 1 && s.streak >= 1; // 어제 출석 → 연속 유지
+      const nextStreak = continues ? (s.streak >= 14 ? 1 : s.streak + 1) : 1;
+      const reward = REWARDS[Math.min(nextStreak - 1, REWARDS.length - 1)] ?? 5;
+      set({ streak: nextStreak, lastCheckIn: today, stardust: s.stardust + reward });
       persist();
       return true;
     },
