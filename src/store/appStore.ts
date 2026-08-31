@@ -1,6 +1,7 @@
 // 친구/알림/퀘스트/출석/인벤토리/설정 목업 통합 store.
 // 화면이 많으니 한 곳에서 관리. 실제 백엔드 없이 in-memory + 일부 영속화.
 import { create } from "zustand";
+import { todayStr, useUserStore } from "./userStore";
 
 export interface Friend {
   id: string;
@@ -59,10 +60,10 @@ const NOTIFS: NotificationItem[] = [
 ];
 
 const QUESTS: Quest[] = [
-  { id: "q1", title: "오늘의 일기 작성", desc: "한 줄이라도 좋아요", reward: 12, done: true },
+  { id: "q1", title: "오늘의 일기 작성", desc: "한 줄이라도 좋아요", reward: 12, done: false },
   { id: "q2", title: "모모와 3턴 대화하기", desc: "마음을 풀어보세요", reward: 8, done: false },
   { id: "q3", title: "친구 행성 방문", desc: "감정 닮음 확인", reward: 6, done: false },
-  { id: "q4", title: "컨디션 체크하기", desc: "수면과 마음 점수", reward: 5, done: true },
+  { id: "q4", title: "컨디션 체크하기", desc: "수면과 마음 점수", reward: 5, done: false },
 ];
 
 const INVENTORY: InventoryItem[] = [
@@ -81,30 +82,93 @@ interface AppState {
   friends: Friend[];
   notifications: NotificationItem[];
   quests: Quest[];
+  questsDate: string; // quests 완료 상태가 속한 로컬 날짜(YYYY-MM-DD)
   inventory: InventoryItem[];
   attendance: number[]; // 출석한 일자 인덱스 (0~13)
   condition: { score: number; sleep: number; tags: string[] };
   settings: Settings;
   markNotifsRead: () => void;
   toggleQuest: (id: string) => void;
+  ensureQuestsForToday: () => void;
+  completeQuest: (id: string) => void;
   buyItem: (id: string) => void;
   setCondition: (score: number, sleep: number, tags: string[]) => void;
   setSetting: <K extends keyof Settings>(k: K, v: Settings[K]) => void;
   addFriend: (code: string) => boolean;
 }
 
+const QUEST_KEY = "innerverse.quests";
+
+// 퀘스트 완료 상태를 로컬 날짜와 함께 저장(하루 단위). 같은 날이면 새로고침해도 유지.
+function loadQuests(base: Quest[]): { quests: Quest[]; questsDate: string } {
+  const today = todayStr();
+  if (typeof window === "undefined") return { quests: base, questsDate: today };
+  try {
+    const raw = window.localStorage.getItem(QUEST_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw) as { questsDate: string; done: Record<string, boolean> };
+      if (saved.questsDate === today) {
+        return { quests: base.map((q) => ({ ...q, done: !!saved.done?.[q.id] })), questsDate: today };
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return { quests: base.map((q) => ({ ...q, done: false })), questsDate: today };
+}
+
+function saveQuests(quests: Quest[], questsDate: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const done: Record<string, boolean> = {};
+    quests.forEach((q) => (done[q.id] = q.done));
+    window.localStorage.setItem(QUEST_KEY, JSON.stringify({ questsDate, done }));
+  } catch {
+    /* ignore */
+  }
+}
+
+const INIT_QUESTS = loadQuests(QUESTS);
+
 export const useAppStore = create<AppState>((set, get) => ({
   friends: FRIENDS,
   notifications: NOTIFS,
-  quests: QUESTS,
+  quests: INIT_QUESTS.quests,
+  questsDate: INIT_QUESTS.questsDate,
   inventory: INVENTORY,
   attendance: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], // 13일 연속
   condition: { score: 72, sleep: 7, tags: ["피곤", "차분"] },
   settings: { notifPush: true, notifLetter: true, notifFriend: true, weekStart: "mon", theme: "dark" },
   markNotifsRead: () => set({ notifications: get().notifications.map((n) => ({ ...n, unread: false })) }),
-  toggleQuest: (id) => set({ quests: get().quests.map((q) => (q.id === id ? { ...q, done: !q.done } : q)) }),
+  toggleQuest: (id) => {
+    get().ensureQuestsForToday(); // 날짜가 바뀌었으면 먼저 리셋
+    const quests = get().quests.map((q) => (q.id === id ? { ...q, done: !q.done } : q));
+    set({ quests });
+    saveQuests(quests, get().questsDate);
+  },
+  // 하루가 지나면(로컬 날짜 변경) 퀘스트 완료 상태를 0/4로 리셋. 같은 날이면 그대로 유지.
+  ensureQuestsForToday: () => {
+    if (get().questsDate === todayStr()) return;
+    const today = todayStr();
+    const quests = get().quests.map((q) => ({ ...q, done: false }));
+    set({ quests, questsDate: today });
+    saveQuests(quests, today);
+  },
+  // 시스템이 활동을 감지해 자동으로 퀘스트 완료 + 별조각 보상 (하루 1회, 중복 방지).
+  completeQuest: (id) => {
+    get().ensureQuestsForToday();
+    const q = get().quests.find((x) => x.id === id);
+    if (!q || q.done) return; // 없거나 이미 완료면 무시(중복 보상 방지)
+    const quests = get().quests.map((x) => (x.id === id ? { ...x, done: true } : x));
+    set({ quests });
+    saveQuests(quests, get().questsDate);
+    useUserStore.getState().earnStardust(q.reward);
+  },
   buyItem: (id) => set({ inventory: get().inventory.map((i) => (i.id === id ? { ...i, owned: true } : i)) }),
-  setCondition: (score, sleep, tags) => set({ condition: { score, sleep, tags } }),
+  setCondition: (score, sleep, tags) => {
+    set({ condition: { score, sleep, tags } });
+    get().completeQuest("q4"); // 컨디션 체크 -> 퀘스트 자동 달성
+  },
   setSetting: (k, v) => set({ settings: { ...get().settings, [k]: v } }),
   addFriend: (code) => {
     if (!code.trim()) return false;

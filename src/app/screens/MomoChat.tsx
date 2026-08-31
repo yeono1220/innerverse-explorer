@@ -9,6 +9,7 @@ import { momoReply } from "@/lib/api";
 import { ragContext } from "@/services/rag";
 import { getMemory, memoryPromptBlock } from "@/services/memory";
 import { CareSheet } from "../ui/CareSheet";
+import { useAppStore } from "@/store/appStore";
 
 interface Msg {
   id: number;
@@ -32,6 +33,7 @@ const REPLIES: Array<{ keys: RegExp; reply: string; emo: EmotionLabel }> = [
 
 export default function MomoChat() {
   const nav = useNavigate();
+  const completeQuest = useAppStore((s) => s.completeQuest);
   const [msgs, setMsgs] = useState<Msg[]>([
     { id: 1, who: "momo", text: "오늘 마음은 어때? 천천히, 떠오르는 대로 들려줘 🌙" },
   ]);
@@ -56,6 +58,8 @@ export default function MomoChat() {
   const send = async (text: string) => {
   const t = text.trim();
   if (!t) return;
+  // 모모와 3턴(사용자 메시지 3개) 대화하면 퀘스트 자동 달성
+  if (msgs.filter((m) => m.who === "me").length + 1 >= 3) completeQuest("q2");
   const rule = REPLIES.find((r) => r.keys.test(t));
   const userMsg: Msg = { id: Date.now(), who: "me", text: t, emo: rule?.emo };
 

@@ -1,4 +1,5 @@
 // 08 · 일기 상세 (음성 파형 mock + 본문 + 감정 태그)
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { StatusBar, AppBar, Body, IconButton } from "../ui/layout";
 import { Card } from "../ui/primitives";
@@ -36,6 +37,33 @@ export default function DiaryDetail() {
   const nav = useNavigate();
   const { id } = useParams();
   const entry = useDiaryStore((s) => (id ? s.byId(id) : undefined));
+  const [saving, setSaving] = useState(false);
+
+  // 앱바 우측 ⤴ : 이 일기(모모챗 자동생성 본문 포함)를 저장 확정하고 홈으로.
+  // DB 저장은 멱등(같은 날짜+본문이면 재사용) — 실패해도 로컬 스토어에는 남아 있으므로 홈으로 이동.
+  const onSaveAndHome = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      if (entry) {
+        const { ensureDiarySaved } = await import("@/services/diaryApi");
+        await ensureDiarySaved({
+          date: entry.date,
+          preview: entry.preview,
+          body: entry.body,
+          audioSec: entry.audioSec,
+          emotions: entry.emotions,
+          keywords: entry.keywords,
+          primary: entry.primary,
+        });
+      }
+    } catch {
+      /* 저장 실패해도 로컬 보관 → 홈 이동은 진행 */
+    } finally {
+      setSaving(false);
+      nav("/home", { replace: true });
+    }
+  };
 
   if (!entry) {
     return (
@@ -52,7 +80,11 @@ export default function DiaryDetail() {
   return (
     <>
       <StatusBar />
-      <AppBar back title={formatDate(entry.date).slice(8)} right={<IconButton ariaLabel="공유">⤴</IconButton>} />
+      <AppBar back title={formatDate(entry.date).slice(8)} right={
+          <IconButton onClick={onSaveAndHome} ariaLabel="저장하고 홈으로">
+            ⤴
+          </IconButton>
+        } />
       <Body>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontSize: 12, color: "var(--iv-txt2)" }}>{formatDate(entry.date)}</div>

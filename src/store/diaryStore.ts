@@ -1,5 +1,6 @@
 // 일기 목업 데이터 + write/save 액션. 실제 백엔드 없이 in-memory.
 import { create } from "zustand";
+import { useAppStore } from "./appStore";
 
 export type EmotionLabel = "기쁨" | "차분" | "사랑" | "슬픔" | "분노" | "긴장" | "공허";
 
@@ -122,6 +123,7 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
   add: (e) => {
     const entry: DiaryEntry = { ...e, id: `d${Date.now()}` };
     set({ entries: [entry, ...get().entries] });
+    useAppStore.getState().completeQuest("q1"); // 일기 작성 -> 퀘스트 자동 달성
     return entry;
   },
   byId: (id) => get().entries.find((e) => e.id === id),

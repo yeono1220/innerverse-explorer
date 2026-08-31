@@ -1,19 +1,16 @@
 // 10 · 퀘스트 (일일 미션 + 별조각 보상)
+import { useEffect } from "react";
 import { StatusBar, AppBar, Body } from "../ui/layout";
 import { Card, CapLabel } from "../ui/primitives";
 import { useAppStore } from "@/store/appStore";
-import { useUserStore } from "@/store/userStore";
 
 export default function Quest() {
   const quests = useAppStore((s) => s.quests);
-  const toggle = useAppStore((s) => s.toggleQuest);
-  const earn = useUserStore((s) => s.earnStardust);
+  const ensureQuestsForToday = useAppStore((s) => s.ensureQuestsForToday);
+  useEffect(() => {
+    ensureQuestsForToday(); // 하루 지났으면 0/4로 리셋
+  }, [ensureQuestsForToday]);
   const done = quests.filter((q) => q.done).length;
-
-  const onCheck = (id: string, reward: number, wasDone: boolean) => {
-    toggle(id);
-    if (!wasDone) earn(reward);
-  };
 
   return (
     <>
@@ -50,9 +47,8 @@ export default function Quest() {
           {quests.map((q) => (
             <Card key={q.id} size="sm">
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <button
-                  onClick={() => onCheck(q.id, q.reward, q.done)}
-                  aria-label={q.done ? "완료 취소" : "완료 처리"}
+                <div
+                  aria-label={q.done ? "완료됨" : "진행 중"}
                   style={{
                     width: 28,
                     height: 28,
@@ -61,12 +57,14 @@ export default function Quest() {
                     background: q.done ? "linear-gradient(135deg,#7c6fe8,#a394f7)" : "transparent",
                     color: "#fff",
                     fontSize: 14,
-                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                     flex: "0 0 auto",
                   }}
                 >
                   {q.done ? "✓" : ""}
-                </button>
+                </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: q.done ? "var(--iv-txt3)" : "var(--iv-txt)", textDecoration: q.done ? "line-through" : "none" }}>
                     {q.title}
@@ -92,7 +90,7 @@ export default function Quest() {
 
         <Card variant="purple">
           <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-            매일 자정 새로운 퀘스트가 생성돼요. 연속 완료 시 보너스 +20.
+            일기 작성·모모 대화·친구 방문·컨디션 체크 같은 활동을 하면 자동으로 완료되고 별조각이 지급돼요. 매일 자정 초기화됩니다.
           </div>
         </Card>
       </Body>

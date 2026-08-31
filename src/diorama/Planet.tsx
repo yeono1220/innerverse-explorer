@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useDioramaStore } from "./dioramaStore";
-import { PLANET_RADIUS } from "./constants";
+import { PLANET_RADIUS, TONE_PRESETS } from "./constants";
 import { planetRot, walkInput } from "@/glass-momo/sharedRefs";
 import { useEmotionStore, BRANCH, EMO7, type Emo7 } from "@/store/emotionStore";
 import { Structures } from "./Structures";
@@ -29,24 +29,30 @@ export function Planet() {
   const atmoMat = useRef<THREE.MeshBasicMaterial>(null);
   const { gl } = useThree();
   const mode = useDioramaStore((s) => s.cameraMode);
+  const toneKey = useDioramaStore((s) => s.toneKey);
+  const tone = TONE_PRESETS[toneKey];
   const emo = useEmotionStore((s) => s.emo);
 
   // 감정 비율 → 행성 색 (가중 블렌딩)
+  // 선택한 행성 톤(TONE_PRESETS)을 기본색으로, 감정 비율이 있으면 그 위에 블렌딩.
   const targetCol = useMemo(() => {
-    const c = new THREE.Color(0, 0, 0);
+    const base = new THREE.Color(tone.mid);
+    const emoCol = new THREE.Color(0, 0, 0);
     let total = 0;
     EMO7.forEach((k) => {
       const w = Math.max(0, emo[k] || 0);
       total += w;
-      c.r += EMO_TINT[k].r * w;
-      c.g += EMO_TINT[k].g * w;
-      c.b += EMO_TINT[k].b * w;
+      emoCol.r += EMO_TINT[k].r * w;
+      emoCol.g += EMO_TINT[k].g * w;
+      emoCol.b += EMO_TINT[k].b * w;
     });
-    if (total > 0) c.multiplyScalar(1 / total);
-    else c.set(0x6f6f8f);
-    return c;
-  }, [emo]);
-  const hiCol = useMemo(() => targetCol.clone().lerp(new THREE.Color(1, 1, 1), 0.45), [targetCol]);
+    if (total > 0) {
+      emoCol.multiplyScalar(1 / total);
+      return base.lerp(emoCol, 0.4); // 톤 60% + 감정 40% 블렌딩
+    }
+    return base; // 감정 데이터 없으면 선택한 톤 그대로
+  }, [emo, tone]);
+  const hiCol = useMemo(() => new THREE.Color(tone.hi), [tone]);
 
   // 드래그 회전 (포인터 캡처 + 관성)
   useEffect(() => {
@@ -101,7 +107,7 @@ export function Planet() {
 
   useFrame((_, dt) => {
     if (!grp.current) return;
-    const sp = 1.4 * Math.min(dt, 0.05);
+    const sp = 0.98 * Math.min(dt, 0.05); // 산책 이동 속도 (기존 1.4의 70%)
 
     // 산책: 방향키로 행성을 굴림 (모모는 고정 → 발밑 지형이 흐름). 전진은 무한 회전(clamp X).
     if (mode === "walk") {

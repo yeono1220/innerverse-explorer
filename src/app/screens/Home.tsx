@@ -1,10 +1,11 @@
 // 03 · 홈 (아바타 + 모모 행성 + 진입 카드들)
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { StatusBar, AppBar, Body, IconButton } from "../ui/layout";
 import { Card, CapLabel } from "../ui/primitives";
 import { HomeAvatarStage } from "../ui/HomeAvatarStage";
 import { EmotionBar } from "../ui/emotion";
-import { useUserStore } from "@/store/userStore";
+import { useUserStore, todayStr } from "@/store/userStore";
 import { useAppStore } from "@/store/appStore";
 import { useDiaryStore, weekSummary } from "@/store/diaryStore";
 import { STAGES, STAGE_LIST, streakToStage } from "@/diorama/growth";
@@ -13,6 +14,14 @@ export default function Home() {
   const nav = useNavigate();
   const user = useUserStore();
   const unread = useAppStore((s) => s.notifications.filter((n) => n.unread).length);
+  const quests = useAppStore((s) => s.quests);
+  const questsDate = useAppStore((s) => s.questsDate);
+  const ensureQuestsForToday = useAppStore((s) => s.ensureQuestsForToday);
+  useEffect(() => {
+    ensureQuestsForToday();
+  }, [ensureQuestsForToday]);
+  // 오늘 것이 아니면(날짜 지남) 0으로 표시
+  const questDone = questsDate === todayStr() ? quests.filter((q) => q.done).length : 0;
   const entries = useDiaryStore((s) => s.entries);
   const summary = weekSummary(entries.slice(0, 5)).slice(0, 3);
   const stage = streakToStage(user.streak);
@@ -173,7 +182,9 @@ export default function Home() {
           <Card size="sm" onClick={() => nav("/quest")}>
             <div style={{ fontSize: 22 }}>✨</div>
             <div className="iv-card-title">오늘의 퀘스트</div>
-            <div className="iv-card-sub">2/4 완료 · 보상 대기</div>
+            <div className="iv-card-sub">
+              {questDone}/{quests.length} 완료 · {questDone === quests.length && quests.length > 0 ? "보상 받기" : "보상 대기"}
+            </div>
           </Card>
           <Card size="sm" onClick={() => nav("/condition")}>
             <div style={{ fontSize: 22 }}>💗</div>

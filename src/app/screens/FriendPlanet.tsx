@@ -1,5 +1,5 @@
 // 14 · 친구 행성 (방문 + 아바타 대화 + 감정 비교)
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { StatusBar, AppBar, Body } from "../ui/layout";
 import { Card, Button, CapLabel } from "../ui/primitives";
@@ -40,6 +40,11 @@ export default function FriendPlanet() {
   const [chat, setChat] = useState<Array<{ who: string; text: string }>>([
     { who: friend?.name ?? "친구", text: "와줘서 고마워 🌸" },
   ]);
+
+  const completeQuest = useAppStore((s) => s.completeQuest);
+  useEffect(() => {
+    completeQuest("q3"); // 친구 행성 방문 -> 퀘스트 자동 달성
+  }, [completeQuest]);
 
   if (!friend) {
     return (

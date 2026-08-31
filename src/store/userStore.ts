@@ -82,7 +82,11 @@ function load(): Persisted {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return def;
-    return { ...def, ...JSON.parse(raw) };
+    const merged = { ...def, ...JSON.parse(raw) };
+    // 마이그레이션: 과거 버전 버그로 lastCheckIn은 있는데 streak이 0인 불일치 →
+    // 오늘 다시 첫 출석할 수 있도록 lastCheckIn 초기화.
+    if (merged.lastCheckIn && merged.streak < 1) merged.lastCheckIn = null;
+    return merged;
   } catch {
     return def;
   }

@@ -58,6 +58,29 @@ export async function saveDiaryEntry(e: Omit<DiaryEntry, "id">): Promise<DiaryEn
   return saved;
 }
 
+/**
+ * 이미 저장된 일기면 그대로 반환, 아니면 DB에 1건 저장.
+ * (모모챗 → 일기 자동생성 경로에서 중복 insert를 막기 위한 멱등 저장)
+ * Supabase 미설정/비로그인 시 null.
+ */
+export async function ensureDiarySaved(e: Omit<DiaryEntry, "id">): Promise<DiaryEntry | null> {
+  const { isSupabaseConfigured } = await import("@/lib/supabase");
+  if (!isSupabaseConfigured || !e.body.trim()) return null;
+  const sb = getSupabase();
+  const { data: u } = await sb.auth.getUser();
+  if (!u.user) return null;
+  const { data: existing } = await sb
+    .from("diary_entries")
+    .select("*")
+    .eq("user_id", u.user.id)
+    .eq("date", e.date)
+    .eq("body", e.body)
+    .limit(1);
+  const cur = (existing as DiaryRow[] | null)?.[0];
+  if (cur) return rowToEntry(cur);
+  return saveDiaryEntry(e);
+}
+
 /** 내 일기 목록 (최신순) */
 export async function listDiaryEntries(): Promise<DiaryEntry[]> {
   const sb = getSupabase();
