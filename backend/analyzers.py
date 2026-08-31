@@ -374,7 +374,8 @@ class ClaudeAnalyzer(_LLMAnalyzer):
         msg = client.messages.create(
             model=self._model,
             max_tokens=max_tokens,
-            temperature=temperature,
+            # temperature is deprecated
+            # temperature=temperature, 
             system=sys_prompt,
             messages=[{"role": "user", "content": user}],
         )

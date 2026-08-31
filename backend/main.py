@@ -423,7 +423,7 @@ def _gen_text(system: str, user: str) -> Optional[str]:
         return out.strip() if out else None
     except Exception as e:
         print(f"[main] generate 실패({analyzer.name}): {e}")
-        return None
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 def _gen_text_momo(system: str, user: str, *, call_type: str,
@@ -567,7 +567,6 @@ def debug_analyze(text: str = "오늘은 조금 지치고 불안했지만 그래
         return {"ok": True, "backend": analyzer.name, "raw": raw}
     except Exception as e:
         return {"ok": False, "backend": analyzer.name, "error": f"{type(e).__name__}: {e}"}
-
 
 @app.post("/api/analyze", response_model=AnalyzeResponse)
 async def analyze_diary(
