@@ -1,7 +1,7 @@
 // 09 · 출석 보상 (14일 캘린더)
 import { StatusBar, AppBar, Body } from "../ui/layout";
 import { Card, Button, CapLabel } from "../ui/primitives";
-import { useUserStore } from "@/store/userStore";
+import { useUserStore, todayStr } from "@/store/userStore";
 import { useAppStore } from "@/store/appStore";
 
 const REWARDS = [3, 3, 5, 5, 8, 8, 10, 10, 12, 12, 15, 15, 20, 30];
@@ -9,10 +9,18 @@ const REWARDS = [3, 3, 5, 5, 8, 8, 10, 10, 12, 12, 15, 15, 20, 30];
 export default function Attendance() {
   const streak = useUserStore((s) => s.streak);
   const stardust = useUserStore((s) => s.stardust);
-  const earn = useUserStore((s) => s.earnStardust);
+  const claimDailyReward = useUserStore((s) => s.claimDailyReward);
+  const lastCheckIn = useUserStore((s) => s.lastCheckIn);
   const attendance = useAppStore((s) => s.attendance);
 
-  const claim = () => earn(REWARDS[Math.min(streak, REWARDS.length - 1)] ?? 5);
+  const reward = REWARDS[Math.min(streak, REWARDS.length - 1)] ?? 5;
+  const claimedToday = lastCheckIn === todayStr();
+
+  // 하루 1회만: 오늘 이미 받았으면 무시하고, 버튼도 disabled 처리.
+  const claim = () => {
+    if (claimedToday) return;
+    claimDailyReward(reward);
+  };
 
   return (
     <>
@@ -69,8 +77,15 @@ export default function Attendance() {
           </div>
         </Card>
 
-        <Button block onClick={claim}>
-          오늘의 별조각 받기 +{REWARDS[Math.min(streak, REWARDS.length - 1)] ?? 5}
+        <Button
+          block
+          onClick={claim}
+          disabled={claimedToday}
+          style={claimedToday ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+        >
+          {claimedToday
+            ? "오늘 출석 완료 ✓ 내일 또 만나요"
+            : `오늘의 별조각 받기 +${reward}`}
         </Button>
       </Body>
     </>

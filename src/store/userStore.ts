@@ -22,15 +22,25 @@ interface UserState {
   planetColor: PlanetColor;
   planetName: string;
   planetCode: string;
+  lastCheckIn: string | null; // 마지막 출석 보상 수령 날짜 (YYYY-MM-DD, 로컬)
   login: (name: string, email: string) => void;
   logout: () => void;
   setProfile: (name: string, color: PlanetColor) => void;
   setPlanetName: (name: string) => void;
   earnStardust: (n: number) => void;
+  claimDailyReward: (amount: number) => boolean; // 하루 1회만 수령; 이미 받았으면 false
   hydrate: (p: Partial<Persisted>) => void;
 }
 
 const STORAGE_KEY = "innerverse.user";
+
+// 로컬 기준 오늘 날짜 (YYYY-MM-DD). UTC 변환으로 인한 날짜 밀림 방지.
+export function todayStr(): string {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
 
 interface Persisted {
   loggedIn: boolean;
@@ -42,6 +52,7 @@ interface Persisted {
   planetColor: PlanetColor;
   planetName: string;
   planetCode: string;
+  lastCheckIn: string | null;
 }
 
 function load(): Persisted {
@@ -55,6 +66,7 @@ function load(): Persisted {
     planetColor: "green",
     planetName: "이음의 행성",
     planetCode: "IEUM-3847",
+    lastCheckIn: null,
   };
   if (typeof window === "undefined") return def;
   try {
@@ -89,6 +101,7 @@ export const useUserStore = create<UserState>((set, get) => {
       planetColor: s.planetColor,
       planetName: s.planetName,
       planetCode: s.planetCode,
+      lastCheckIn: s.lastCheckIn,
     });
   };
   return {
@@ -112,6 +125,14 @@ export const useUserStore = create<UserState>((set, get) => {
     earnStardust: (n) => {
       set({ stardust: get().stardust + n });
       persist();
+    },
+    // 하루 1회 출석 보상. 오늘 이미 받았으면 아무것도 안 하고 false 반환.
+    claimDailyReward: (amount) => {
+      const today = todayStr();
+      if (get().lastCheckIn === today) return false;
+      set({ stardust: get().stardust + amount, lastCheckIn: today });
+      persist();
+      return true;
     },
     // Supabase 세션/프로필에서 받아온 값으로 채움 (로그인 복원)
     hydrate: (p) => {
