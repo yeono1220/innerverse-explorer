@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useUserStore, DEFAULT_USER, todayStr, weekKey, REWARDS } from "./userStore";
 import { useUsageStore } from "./usageStore";
+import { useAppStore } from "./appStore";
 import { PLAN_LIMITS } from "@/lib/plan";
 import { mileageForNextLevel, START_LEVEL } from "@/lib/level";
 
@@ -24,6 +25,23 @@ describe("신규 가입 기본값", () => {
     expect(s.streak).toBe(0);
     expect(s.plan).toBe("free");
     expect(s.mileageUse).toBe("level");
+  });
+
+  it("행성 코드는 {아이디}-숫자4개 형식이어야 한다", () => {
+    const code = useUserStore.getState().planetCode;
+    expect(code).toMatch(/^[A-Za-z가-힣]+-\d{4}$/);
+    expect(code).not.toBe("IEUM-3847");
+  });
+
+  it("영문·한글을 섞은 아이디도 행성 코드로 쓸 수 있어야 한다", () => {
+    expect(/^[A-Za-z가-힣]+-\d{4}$/.test("IEUM-3847")).toBe(true);
+    expect(/^[A-Za-z가-힣]+-\d{4}$/.test("이음-4821")).toBe(true);
+    expect(/^[A-Za-z가-힣]+-\d{4}$/.test("kim123-4821")).toBe(false);
+  });
+
+  it("초기 인벤토리의 소유 아이템은 모두 0개여야 한다", () => {
+    const allOwned = useAppStore.getState().inventory.filter((item) => item.owned).length;
+    expect(allOwned).toBe(0);
   });
 });
 

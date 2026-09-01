@@ -97,9 +97,20 @@ interface Persisted {
   lastCheckIn: string | null;
 }
 
+export function generatePlanetCode(prefix = "IEUM") {
+  const safePrefix = String(prefix ?? "IEUM")
+    .trim()
+    .replace(/[^A-Za-z0-9가-힣]/g, "")
+    .slice(0, 12);
+
+  const digits = String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+  const normalized = safePrefix || "IEUM";
+  return `${normalized.toUpperCase()}-${digits}`;
+}
+
 export const DEFAULT_USER: Persisted = {
   loggedIn: false,
-  name: "이음",
+  name: "IEUM",
   email: "",
   level: START_LEVEL,
   levelExp: 0,
@@ -111,7 +122,7 @@ export const DEFAULT_USER: Persisted = {
   plan: "free",
   planetColor: "green",
   planetName: "이음의 행성",
-  planetCode: "IEUM-3847",
+  planetCode: generatePlanetCode("IEUM"),
   lastCheckIn: null,
 };
 

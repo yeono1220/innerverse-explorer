@@ -1,6 +1,7 @@
 // 상단 캡션 + 행성 이름 + 분기 배지 + 시점 리셋 버튼
 import { useEmotionStore, BRANCH } from "@/store/emotionStore";
 import { resetPlanetRot } from "../sharedRefs";
+import { useUserStore } from "../../store/userStore";
 
 export function TopBar() {
   const branch = useEmotionStore((s) => s.branch);
@@ -8,7 +9,7 @@ export function TopBar() {
   const b = BRANCH[branch];
 
   const cap = friendMode ? "FRIEND VISIT" : "MY UNIVERSE";
-  const title = friendMode ? "소연이의 행성과 교류 중" : "이음의 행성";
+  const title = friendMode ? "다른 행성과 교류 중" : `${useUserStore.getState().name}의 행성`;
 
   return (
     <div className="iv-topbar">

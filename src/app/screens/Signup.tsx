@@ -25,7 +25,7 @@ export default function Signup() {
   const [busy, setBusy] = useState(false);
 
   const onSubmit = async () => {
-    const trimmed = name.trim() || "이음";
+    const trimmed = name.trim() || "IEUM";
 
     // 목업 모드 (Supabase 미설정) — 기존 동작
     if (!isSupabaseConfigured) {

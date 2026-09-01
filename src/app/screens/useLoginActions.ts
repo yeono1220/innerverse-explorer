@@ -27,7 +27,7 @@ export function useLoginActions() {
 
   const goHome = () => nav("/home", { replace: true });
   const demoLogin = (displayName: string, email = "") => {
-    login(displayName || name || "이음", email);
+    login(displayName || name || "IEUM", email);
     goHome();
   };
 

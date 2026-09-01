@@ -70,15 +70,15 @@ const QUESTS: Quest[] = [
 ];
 
 const INVENTORY: InventoryItem[] = [
-  { id: "i1", name: "달 데코", emoji: "🌙", category: "deco", owned: true, price: 30 },
-  { id: "i2", name: "별 스티커", emoji: "✨", category: "deco", owned: true, price: 20 },
-  { id: "i3", name: "구름", emoji: "☁️", category: "weather", owned: true, price: 25 },
+  { id: "i1", name: "달 데코", emoji: "🌙", category: "deco", owned: false, price: 30 },
+  { id: "i2", name: "별 스티커", emoji: "✨", category: "deco", owned: false, price: 20 },
+  { id: "i3", name: "구름", emoji: "☁️", category: "weather", owned: false, price: 25 },
   { id: "i4", name: "번개", emoji: "⚡", category: "weather", owned: false, price: 45 },
   { id: "i5", name: "오로라", emoji: "🌈", category: "weather", owned: false, price: 80 },
   { id: "i6", name: "고래", emoji: "🐋", category: "creature", owned: false, price: 120 },
-  { id: "i7", name: "여우", emoji: "🦊", category: "creature", owned: true, price: 60 },
+  { id: "i7", name: "여우", emoji: "🦊", category: "creature", owned: false, price: 60 },
   { id: "i8", name: "나무", emoji: "🌳", category: "deco", owned: false, price: 35 },
-  { id: "i9", name: "꽃", emoji: "🌸", category: "deco", owned: true, price: 18 },
+  { id: "i9", name: "꽃", emoji: "🌸", category: "deco", owned: false, price: 18 },
 ];
 
 interface AppState {

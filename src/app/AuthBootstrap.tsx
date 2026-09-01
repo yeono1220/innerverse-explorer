@@ -48,7 +48,7 @@ export function AuthBootstrap() {
         const migrated = p.level_exp !== undefined && p.level_exp !== null;
         useUserStore.getState().hydrate({
           loggedIn: true,
-          name: p.nickname ?? "이음",
+          name: p.nickname ?? "IEUM",
           email: p.email ?? "",
           planetColor: p.planet_color,
           planetName: p.planet_name ?? `${p.nickname ?? "나"}의 행성`,
