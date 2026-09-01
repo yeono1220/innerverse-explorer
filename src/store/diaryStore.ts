@@ -113,6 +113,12 @@ const MOCK: DiaryEntry[] = [
 interface DiaryState {
   entries: DiaryEntry[];
   add: (entry: Omit<DiaryEntry, "id">) => DiaryEntry;
+  /**
+   * 기존 일기 수정. 본문을 고치면 재분석한 emotions/keywords/primary를 함께 넘긴다.
+   * 작성일(date)과 id는 유지되고, 퀘스트 보상은 다시 지급되지 않는다.
+   * (일기 삭제는 의도적으로 제공하지 않는다)
+   */
+  update: (id: string, patch: Partial<Omit<DiaryEntry, "id" | "date">>) => DiaryEntry | undefined;
   byId: (id: string) => DiaryEntry | undefined;
   setEntries: (entries: DiaryEntry[]) => void;
   loadFromDb: () => Promise<void>;
@@ -125,6 +131,13 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
     set({ entries: [entry, ...get().entries] });
     useAppStore.getState().completeQuest("q1"); // 일기 작성 -> 퀘스트 자동 달성
     return entry;
+  },
+  update: (id, patch) => {
+    const cur = get().entries.find((e) => e.id === id);
+    if (!cur) return undefined;
+    const next: DiaryEntry = { ...cur, ...patch };
+    set({ entries: get().entries.map((e) => (e.id === id ? next : e)) });
+    return next;
   },
   byId: (id) => get().entries.find((e) => e.id === id),
   setEntries: (entries) => set({ entries }),

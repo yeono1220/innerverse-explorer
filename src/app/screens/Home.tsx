@@ -4,8 +4,9 @@ import { useNavigate } from "react-router-dom";
 import { StatusBar, AppBar, Body, IconButton } from "../ui/layout";
 import { Card, CapLabel } from "../ui/primitives";
 import { HomeAvatarStage } from "../ui/HomeAvatarStage";
+import { LevelBar } from "../ui/LevelBar";
 import { EmotionBar } from "../ui/emotion";
-import { useUserStore, todayStr } from "@/store/userStore";
+import { useUserStore, todayStr, REWARDS } from "@/store/userStore";
 import { useAppStore } from "@/store/appStore";
 import { useDiaryStore, weekSummary } from "@/store/diaryStore";
 import { STAGES, STAGE_LIST, streakToStage } from "@/diorama/growth";
@@ -27,6 +28,8 @@ export default function Home() {
   const stage = streakToStage(user.streak);
   const stageSpec = STAGES[stage];
   const stagePct = ((stage - 1) / 6) * 100;
+  // 내일 받게 될 출석 보상(연속이 이어진다고 가정)
+  const nextReward = REWARDS[Math.min(user.streak, REWARDS.length - 1)] ?? 5;
 
   return (
     <>
@@ -66,8 +69,13 @@ export default function Home() {
           <CapLabel>MY UNIVERSE</CapLabel>
           <h2 style={{ fontSize: 23, fontWeight: 800, marginTop: 4 }}>{user.planetName}</h2>
           <p style={{ fontSize: 12, color: "var(--iv-txt2)", marginTop: 4 }}>
-            Lv.{user.level} · 연속 {user.streak}일 · 별조각 {user.stardust}
+            연속 {user.streak}일 기록 중
           </p>
+        </div>
+
+        {/* 레벨 스탯바 — 별조각은 수치 대신 "얼마나 찼는지"로만 보여준다 */}
+        <div style={{ padding: "2px 2px 0" }}>
+          <LevelBar />
         </div>
 
         <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 4px" }}>
@@ -177,7 +185,7 @@ export default function Home() {
           <Card size="sm" onClick={() => nav("/attendance")}>
             <div style={{ fontSize: 22 }}>🌙</div>
             <div className="iv-card-title">출석 보상</div>
-            <div className="iv-card-sub">{user.streak}일 연속 · 내일은 +10</div>
+            <div className="iv-card-sub">{user.streak}일 연속 · 내일 ✦{nextReward}</div>
           </Card>
           <Card size="sm" onClick={() => nav("/quest")}>
             <div style={{ fontSize: 22 }}>✨</div>

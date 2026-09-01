@@ -1,39 +1,30 @@
 // 04 · 일기 작성 (녹음 + 텍스트). 분석은 mock — 키워드 매칭으로 감정 비중 추정.
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { StatusBar, AppBar, Body } from "../ui/layout";
 import { Button } from "../ui/primitives";
 import { useDiaryStore, type EmotionLabel } from "@/store/diaryStore";
-import { analyzeDiary, analyzeVision } from "@/lib/api";
-
-const RULES: Array<[EmotionLabel, RegExp]> = [
-  ["기쁨", /기쁘|행복|뿌듯|좋|감사|신나|설레|즐거/],
-  ["사랑", /사랑|보고싶|애틋|따뜻|애정/],
-  ["차분", /평온|편안|안정|차분|괜찮|담담|쉬|쉬엄/],
-  ["슬픔", /슬프|우울|눈물|외로|지쳤|허전|아프/],
-  ["분노", /화|짜증|답답|억울|열받|분노|짜증/],
-  ["긴장", /불안|걱정|초조|긴장|무섭|두렵|떨려|회의/],
-  ["공허", /공허|텅 빈|무기력|허무|아무것/],
-];
-
-function analyze(text: string): { emotions: Array<{ label: EmotionLabel; pct: number }>; keywords: string[]; primary: EmotionLabel } {
-  const scores: Record<EmotionLabel, number> = { 기쁨: 4, 차분: 4, 사랑: 2, 슬픔: 2, 분노: 1, 긴장: 2, 공허: 1 };
-  RULES.forEach(([label, re]) => {
-    const m = text.match(new RegExp(re, "g"));
-    if (m) scores[label] += m.length * 8;
-  });
-  const total = Object.values(scores).reduce((s, v) => s + v, 0);
-  const arr = (Object.entries(scores) as Array<[EmotionLabel, number]>)
-    .map(([label, v]) => ({ label, pct: Math.round((v / total) * 100) }))
-    .filter((x) => x.pct >= 5)
-    .sort((a, b) => b.pct - a.pct);
-  const keywords = Array.from(text.matchAll(/[가-힣]{2,6}/g)).map((m) => m[0]).filter((w, i, a) => a.indexOf(w) === i).slice(0, 4);
-  return { emotions: arr, keywords, primary: arr[0]?.label ?? "차분" };
-}
+import { analyzeVision } from "@/lib/api";
+import { analyzeText, makePreview, VOICE_ONLY_BODY } from "@/lib/diaryAnalyze";
+import { useUsageStore } from "@/store/usageStore";
+import { useUserStore } from "@/store/userStore";
+import { limitsFor, isUnlimited } from "@/lib/plan";
+import { PlanNotice } from "../ui/PlanNotice";
+import { BusyOverlay } from "../ui/BusyOverlay";
 
 export default function DiaryWrite() {
   const nav = useNavigate();
   const add = useDiaryStore((s) => s.add);
+  // 무료 플랜: 주간 일기 개수 제한 (구독자는 무제한)
+  const diaryCount = useUsageStore((s) => s.diaryCount);
+  const consumeDiary = useUsageStore((s) => s.consumeDiary);
+  const ensureFresh = useUsageStore((s) => s.ensureFresh);
+  const plan = useUserStore((s) => s.plan);
+  const diaryLeft = Math.max(0, limitsFor(plan).diaryPerWeek - diaryCount);
+  const quotaOver = diaryLeft <= 0;
+  useEffect(() => {
+    ensureFresh(); // 주가 바뀌었으면 카운터 리셋
+  }, [ensureFresh]);
   const [text, setText] = useState("");
   const [recording, setRecording] = useState(false);
   const [audioSec, setAudioSec] = useState(0);
@@ -122,21 +113,16 @@ export default function DiaryWrite() {
 
   const onSubmit = async () => {
     if ((!text.trim() && audioSec === 0) || loading) return;
+    if (!consumeDiary()) return; // 이번 주 한도 초과 → 저장하지 않음
     setLoading(true);
 
-    // 백엔드(Gemini) 분석 우선, 실패하면 로컬 규칙으로 폴백
-    let analyzed: { emotions: { label: EmotionLabel; pct: number }[]; keywords: string[]; primary: EmotionLabel };
-    try {
-      const a = await analyzeDiary(text || "(음성 기록만)");
-      analyzed = a.emotions.length ? a : analyze(text || "(음성 기록만)");
-    } catch {
-      analyzed = analyze(text || "(음성 기록만)");
-    }
+    // 작성·수정이 같은 분석 파이프라인을 쓴다 (백엔드 우선, 실패 시 규칙 기반)
+    const analyzed = await analyzeText(text);
 
     const entry = add({
       date: new Date().toISOString().slice(0, 10),
-      preview: (text || "음성으로 남긴 마음").slice(0, 60),
-      body: text || "음성으로 남긴 마음",
+      preview: makePreview(text),
+      body: text.trim() || VOICE_ONLY_BODY,
       audioSec,
       emotions: analyzed.emotions,
       keywords: analyzed.keywords,
@@ -177,7 +163,15 @@ export default function DiaryWrite() {
       <Body>
         <div style={{ fontSize: 12, color: "var(--iv-txt2)" }}>
           {new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
+          {!isUnlimited(diaryLeft) && ` · 이번 주 ${diaryLeft}개 남음`}
         </div>
+
+        {quotaOver && (
+          <PlanNotice
+            title="이번 주 일기를 다 썼어요"
+            body="무료 플랜은 주 5개예요. 다음 주 월요일에 다시 채워지고, 플러스는 개수 제한 없이 쓸 수 있어요."
+          />
+        )}
         <textarea
           className="iv-input iv-textarea"
           placeholder={
@@ -283,11 +277,16 @@ export default function DiaryWrite() {
           >
             {recording ? "■" : "🎤"}
           </button>
-          <Button block onClick={onSubmit} disabled={loading || (!text.trim() && audioSec === 0)}>
-            {loading ? "✦ 우주로 보내는 중…" : "✦ 우주로 전송하기"}
+          <Button block onClick={onSubmit} disabled={loading || quotaOver || (!text.trim() && audioSec === 0)}>
+            {quotaOver ? "이번 주 한도를 다 썼어요" : loading ? "✦ 우주로 보내는 중…" : "✦ 우주로 전송하기"}
           </Button>
         </div>
       </Body>
+      <BusyOverlay
+        open={loading}
+        label="전송중"
+        hint="마음을 읽고 감정과 키워드를 뽑고 있어요. 잠시만요."
+      />
     </>
   );
 }

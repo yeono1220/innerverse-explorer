@@ -59,9 +59,12 @@ const NOTIFS: NotificationItem[] = [
   { id: "n4", type: "review", title: "이번 주 리뷰가 준비됐어요", body: "감정 풍경을 확인해보세요.", time: "어제", unread: false },
 ];
 
+/** q2 달성 기준 — 사용자 발화 턴 수. MomoChat의 판정도 이 값을 쓴다. */
+export const MOMO_QUEST_TURNS = 4;
+
 const QUESTS: Quest[] = [
-  { id: "q1", title: "오늘의 일기 작성", desc: "한 줄이라도 좋아요", reward: 12, done: false },
-  { id: "q2", title: "모모와 3턴 대화하기", desc: "마음을 풀어보세요", reward: 8, done: false },
+  { id: "q1", title: "오늘의 일기 작성", desc: "한 줄이라도 좋아요", reward: 4, done: false },
+  { id: "q2", title: `모모와 ${MOMO_QUEST_TURNS}턴 대화하기`, desc: "마음을 풀어보세요", reward: 8, done: false },
   { id: "q3", title: "친구 행성 방문", desc: "감정 닮음 확인", reward: 6, done: false },
   { id: "q4", title: "컨디션 체크하기", desc: "수면과 마음 점수", reward: 5, done: false },
 ];
@@ -91,7 +94,9 @@ interface AppState {
   toggleQuest: (id: string) => void;
   ensureQuestsForToday: () => void;
   completeQuest: (id: string) => void;
-  buyItem: (id: string) => void;
+  buyItem: (id: string) => boolean;
+  /** 레벨업 보상: 아직 없는 아이템 1종을 무료로 지급. 없으면 null. */
+  grantLevelReward: () => InventoryItem | null;
   setCondition: (score: number, sleep: number, tags: string[]) => void;
   setSetting: <K extends keyof Settings>(k: K, v: Settings[K]) => void;
   addFriend: (code: string) => boolean;
@@ -162,9 +167,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     const quests = get().quests.map((x) => (x.id === id ? { ...x, done: true } : x));
     set({ quests });
     saveQuests(quests, get().questsDate);
-    useUserStore.getState().earnStardust(q.reward);
+    useUserStore.getState().earnMileage(q.reward);
   },
-  buyItem: (id) => set({ inventory: get().inventory.map((i) => (i.id === id ? { ...i, owned: true } : i)) }),
+  // 별조각 잔액에서 실제로 차감한다. 잔액이 모자라면 구매 실패.
+  buyItem: (id) => {
+    const item = get().inventory.find((i) => i.id === id);
+    if (!item || item.owned) return false;
+    if (!useUserStore.getState().spendMileage(item.price)) return false;
+    set({ inventory: get().inventory.map((i) => (i.id === id ? { ...i, owned: true } : i)) });
+    return true;
+  },
+  grantLevelReward: () => {
+    const locked = get().inventory.filter((i) => !i.owned);
+    if (locked.length === 0) return null;
+    const pick = locked[Math.floor(Math.random() * locked.length)];
+    set({ inventory: get().inventory.map((i) => (i.id === pick.id ? { ...i, owned: true } : i)) });
+    return { ...pick, owned: true };
+  },
   setCondition: (score, sleep, tags) => {
     set({ condition: { score, sleep, tags } });
     get().completeQuest("q4"); // 컨디션 체크 -> 퀘스트 자동 달성

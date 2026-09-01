@@ -90,7 +90,7 @@ export default function Quest() {
 
         <Card variant="purple">
           <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-            일기 작성·모모 대화·친구 방문·컨디션 체크 같은 활동을 하면 자동으로 완료되고 별조각이 지급돼요. 매일 자정 초기화됩니다.
+            일기 작성·모모 대화·친구 방문·컨디션 체크를 하면 자동으로 완료되고 별조각이 지급돼요. 별조각은 설정한 대로 성장(레벨업) 또는 구독 할인에 쌓입니다. 매일 자정 초기화됩니다.
           </div>
         </Card>
       </Body>

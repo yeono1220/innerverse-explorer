@@ -9,7 +9,11 @@ import { momoReply } from "@/lib/api";
 import { ragContext } from "@/services/rag";
 import { getMemory, memoryPromptBlock } from "@/services/memory";
 import { CareSheet } from "../ui/CareSheet";
-import { useAppStore } from "@/store/appStore";
+import { useAppStore, MOMO_QUEST_TURNS } from "@/store/appStore";
+import { useUsageStore } from "@/store/usageStore";
+import { useUserStore } from "@/store/userStore";
+import { PlanNotice } from "../ui/PlanNotice";
+import { isUnlimited, limitsFor } from "@/lib/plan";
 
 interface Msg {
   id: number;
@@ -34,6 +38,17 @@ const REPLIES: Array<{ keys: RegExp; reply: string; emo: EmotionLabel }> = [
 export default function MomoChat() {
   const nav = useNavigate();
   const completeQuest = useAppStore((s) => s.completeQuest);
+  // 무료 플랜: 하루 대화 턴 제한 (구독자는 무제한)
+  const chatTurns = useUsageStore((s) => s.chatTurns);
+  const consumeChatTurn = useUsageStore((s) => s.consumeChatTurn);
+  const ensureFresh = useUsageStore((s) => s.ensureFresh);
+  const plan = useUserStore((s) => s.plan);
+  const chatLeft = Math.max(0, limitsFor(plan).chatTurnsPerDay - chatTurns);
+  const locked = chatLeft <= 0;
+
+  useEffect(() => {
+    ensureFresh(); // 날짜가 바뀌었으면 턴 카운터 리셋
+  }, [ensureFresh]);
   const [msgs, setMsgs] = useState<Msg[]>([
     { id: 1, who: "momo", text: "오늘 마음은 어때? 천천히, 떠오르는 대로 들려줘 🌙" },
   ]);
@@ -58,8 +73,18 @@ export default function MomoChat() {
   const send = async (text: string) => {
   const t = text.trim();
   if (!t) return;
-  // 모모와 3턴(사용자 메시지 3개) 대화하면 퀘스트 자동 달성
-  if (msgs.filter((m) => m.who === "me").length + 1 >= 3) completeQuest("q2");
+  // 무료 플랜 하루 한도 소진 시 전송 차단
+  if (!consumeChatTurn()) {
+    setMsgs((m) => [
+      ...m,
+      { id: Date.now(), who: "momo", text: "오늘 나눌 수 있는 이야기를 다 썼어. 내일 다시 만나거나, 플러스로 계속 이어갈 수 있어 🌙" },
+    ]);
+    setInput("");
+    return;
+  }
+  // 퀘스트 판정은 화면 상태가 아니라 "오늘 누적 발화 수"(usageStore)로 센다.
+  // 대화 도중 뒤로 갔다가 다시 들어와도 이어서 카운트된다.
+  if (useUsageStore.getState().chatTurns >= MOMO_QUEST_TURNS) completeQuest("q2");
   const rule = REPLIES.find((r) => r.keys.test(t));
   const userMsg: Msg = { id: Date.now(), who: "me", text: t, emo: rule?.emo };
 
@@ -99,7 +124,7 @@ export default function MomoChat() {
       <StatusBar />
       <AppBar
         back
-        title="모모와 대화"
+        title={isUnlimited(chatLeft) ? "모모와 대화" : `모모와 대화 · ${chatLeft}턴`}
         right={
           <IconButton onClick={() => nav("/momo/complete", { state: { msgs, sessionId } })} ariaLabel="일기로 완성">
             ✓
@@ -157,10 +182,20 @@ export default function MomoChat() {
           <div ref={bottomRef} />
         </div>
 
+        {locked && (
+          <div style={{ padding: "0 18px 8px" }}>
+            <PlanNotice
+              title="오늘의 대화를 다 썼어요"
+              body="무료 플랜은 하루 15턴이에요. 플러스로 바꾸면 모모와 무제한으로 이야기할 수 있어요."
+            />
+          </div>
+        )}
+
         <div style={{ padding: "0 18px 8px", display: "flex", gap: 6, overflowX: "auto" }}>
           {SUGGESTIONS.map((s) => (
             <button
               key={s}
+              disabled={locked}
               onClick={() => send(s)}
               style={{
                 fontSize: 11.5,
@@ -187,13 +222,15 @@ export default function MomoChat() {
         >
           <input
             className="iv-input"
-            placeholder="모모에게 들려주기…"
+            disabled={locked}
+            placeholder={locked ? "오늘의 대화 한도를 다 썼어요" : "모모에게 들려주기…"}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             style={{ flex: 1 }}
           />
           <button
             type="submit"
+            disabled={locked}
             className="iv-iconbtn"
             style={{ background: "linear-gradient(135deg,#7c6fe8,#a394f7)", border: "none" }}
             aria-label="보내기"

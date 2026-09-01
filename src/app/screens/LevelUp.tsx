@@ -1,18 +1,31 @@
 // 23 · 레벨업 축하 (성장 모먼트 + 컨페티)
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { StatusBar, Body } from "../ui/layout";
 import { Button, CapLabel } from "../ui/primitives";
 import { HomeAvatarStage } from "../ui/HomeAvatarStage";
 import { useUserStore } from "@/store/userStore";
+import { useAppStore } from "@/store/appStore";
 
 export default function LevelUp() {
   const nav = useNavigate();
+  const loc = useLocation();
   const user = useUserStore();
+  const clearLevelUp = useUserStore((s) => s.clearLevelUp);
+  // 진입 시점의 레벨을 고정해 두고(스토어를 즉시 비우므로) 축하 문구에 사용.
+  const reached = useRef<number>(useUserStore.getState().pendingLevelUp ?? user.level);
+  const back = (loc.state as { from?: string } | null)?.from ?? "/home";
+
+  const [reward, setReward] = useState<{ name: string; emoji: string } | null>(null);
+
   useEffect(() => {
     document.body.classList.add("iv-confetti-host");
+    if (useUserStore.getState().pendingLevelUp != null) {
+      setReward(useAppStore.getState().grantLevelReward()); // 레벨업 보상 데코 1종
+      clearLevelUp(); // 신호 소비 — 되돌아가도 다시 튀지 않게
+    }
     return () => document.body.classList.remove("iv-confetti-host");
-  }, []);
+  }, [clearLevelUp]);
 
   return (
     <>
@@ -53,14 +66,20 @@ export default function LevelUp() {
             <HomeAvatarStage color={user.planetColor} size={200} rotating />
           </div>
           <div>
-            <h1 style={{ fontSize: 30, fontWeight: 800 }}>Lv. {user.level} 도달!</h1>
+            <h1 style={{ fontSize: 30, fontWeight: 800 }}>Lv. {reached.current} 도달!</h1>
             <p style={{ fontSize: 13.5, color: "var(--iv-txt2)", marginTop: 8, lineHeight: 1.6 }}>
               마음을 꾸준히 쌓아온 보상이에요.<br />
-              <b style={{ color: "var(--iv-purple2)" }}>특별 데코 1종</b>이 인벤토리에 추가됐어요.
+              {reward ? (
+                <>
+                  <b style={{ color: "var(--iv-purple2)" }}>{reward.emoji} {reward.name}</b>이(가) 인벤토리에 추가됐어요.
+                </>
+              ) : (
+                <>다음 레벨에서도 새로운 것이 기다리고 있어요.</>
+              )}
             </p>
           </div>
-          <Button onClick={() => nav("/home", { replace: true })} style={{ minWidth: 200 }}>
-            홈으로
+          <Button onClick={() => nav(back, { replace: true })} style={{ minWidth: 200 }}>
+            계속하기
           </Button>
         </div>
         <style>{`

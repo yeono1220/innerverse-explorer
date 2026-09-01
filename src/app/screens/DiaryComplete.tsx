@@ -1,4 +1,5 @@
 // 17 · 모모 대화 → 일기 완성 시트
+import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { StatusBar, AppBar, Body } from "../ui/layout";
 import { Card, Button } from "../ui/primitives";
@@ -8,6 +9,7 @@ import { generateDiaryFromChat, finalizeChatToDiary } from "@/services/momoApi";
 import { analyzeDiary } from "@/lib/api";
 import { useEmotionStore } from "@/store/emotionStore";
 import { useUserStore } from "@/store/userStore";
+import { BusyOverlay } from "../ui/BusyOverlay";
 
 interface Msg {
   who: "momo" | "me";
@@ -19,6 +21,7 @@ export default function DiaryComplete() {
   const nav = useNavigate();
   const loc = useLocation();
   const add = useDiaryStore((s) => s.add);
+  const [busy, setBusy] = useState(false);
   const state = loc.state as { msgs?: Msg[]; sessionId?: string } | null;
   // const msgs: Msg[] = (loc.state as { msgs?: Msg[] })?.msgs ?? [];
   const msgs: Msg[] = state?.msgs ?? [];
@@ -38,10 +41,12 @@ export default function DiaryComplete() {
   const keywords = Array.from(body.matchAll(/[가-힣]{2,5}/g)).map((m) => m[0]).filter((w, i, a) => a.indexOf(w) === i).slice(0, 4);
 
   const onSave = async () => {
+    if (busy) return;
     if (!body) {
       nav("/home");
       return;
     }
+    setBusy(true); // 일기 생성 + 감정 분석은 오래 걸린다 → 오버레이로 진행 상태 표시
     const turns = msgs.map((m) => ({ who: m.who, text: m.text, emo: m.emo as string | undefined }));
     let finalBody = body;
     const meta = {
@@ -79,6 +84,7 @@ export default function DiaryComplete() {
       keywords: meta.keywords,
       primary: meta.primary,
     });
+    setBusy(false);
     nav(`/diary/${entry.id}`, { replace: true });
   };
 
@@ -127,14 +133,19 @@ export default function DiaryComplete() {
         )}
 
         <div style={{ display: "flex", gap: 10, marginTop: "auto" }}>
-          <Button variant="ghost" block onClick={() => nav(-1)}>
+          <Button variant="ghost" block onClick={() => nav(-1)} disabled={busy}>
             대화로 돌아가기
           </Button>
-          <Button block onClick={onSave}>
+          <Button block onClick={onSave} disabled={busy}>
             저장하기
           </Button>
         </div>
       </Body>
+      <BusyOverlay
+        open={busy}
+        label="전송중"
+        hint="모모가 대화를 일기로 정리하고 감정을 분석하고 있어요."
+      />
     </>
   );
 }

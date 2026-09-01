@@ -5,6 +5,8 @@ import { Card, Toggle } from "../ui/primitives";
 import { Planet2D } from "../ui/planet";
 import { useUserStore } from "@/store/userStore";
 import { useAppStore } from "@/store/appStore";
+import { LevelBar } from "../ui/LevelBar";
+import { PLAN_LABEL, PLUS_PRICE_WON } from "@/lib/plan";
 
 function Row({ label, sub, right }: { label: string; sub?: string; right: React.ReactNode }) {
   return (
@@ -47,7 +49,7 @@ export default function Settings() {
                 {user.planetCode} · Lv.{user.level}
               </div>
               <div style={{ fontSize: 11.5, color: "var(--iv-purple2)", marginTop: 2 }}>
-                별조각 {user.stardust}개 보유
+                별조각 ✦{user.stardust} · {PLAN_LABEL[user.plan]}
               </div>
             </div>
             <button
@@ -57,6 +59,26 @@ export default function Settings() {
             >
               ✎
             </button>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <LevelBar compact />
+          </div>
+        </Card>
+
+        <Card onClick={() => nav("/plan")}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ fontSize: 24 }}>{user.plan === "plus" ? "💎" : "✦"}</div>
+            <div style={{ flex: 1 }}>
+              <div className="iv-card-title">플랜 & 별조각</div>
+              <div className="iv-card-sub">
+                {user.plan === "plus"
+                  ? "플러스 이용 중 · 무제한 대화"
+                  : user.mileageUse === "discount"
+                  ? `할인 ${user.discountWon.toLocaleString("ko-KR")}원 적립 · 플러스 월 ${PLUS_PRICE_WON.toLocaleString("ko-KR")}원`
+                  : "별조각이 성장에 쌓이는 중"}
+              </div>
+            </div>
+            <div style={{ color: "var(--iv-purple2)", fontSize: 18 }}>›</div>
           </div>
         </Card>
 

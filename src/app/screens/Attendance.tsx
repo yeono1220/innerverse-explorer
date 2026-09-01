@@ -36,7 +36,7 @@ export default function Attendance() {
           <CapLabel>STREAK</CapLabel>
           <h2 style={{ fontSize: 26, fontWeight: 800, marginTop: 6 }}>{currentStreak}일 연속</h2>
           <p style={{ fontSize: 12.5, color: "var(--iv-txt2)", marginTop: 6 }}>
-            별조각 {stardust}개 · {claimedToday ? "오늘 출석 완료 ✓" : `오늘 보상 +${reward}`}
+            별조각 ✦{stardust} · {claimedToday ? "오늘 출석 완료 ✓" : `오늘 보상 +${reward}`}
           </p>
         </div>
 

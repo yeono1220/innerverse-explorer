@@ -16,17 +16,16 @@ export default function Inventory() {
   const items = useAppStore((s) => s.inventory);
   const buy = useAppStore((s) => s.buyItem);
   const stardust = useUserStore((s) => s.stardust);
-  const earn = useUserStore((s) => s.earnStardust);
   const [cat, setCat] = useState<(typeof CATS)[number]["key"]>("all");
   const [selected, setSelected] = useState<string | null>(null);
 
   const list = cat === "all" ? items : items.filter((i) => i.category === cat);
   const sel = items.find((i) => i.id === selected);
 
+  // 잔액 차감은 buyItem 내부에서 처리한다(단일 출처).
   const onBuy = () => {
-    if (!sel || sel.owned || stardust < sel.price) return;
+    if (!sel || sel.owned) return;
     buy(sel.id);
-    earn(-sel.price);
   };
 
   return (

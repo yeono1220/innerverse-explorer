@@ -1,6 +1,7 @@
 // 프로필 서비스 (Supabase profiles ↔ userStore)
 import { getSupabase } from "@/lib/supabase";
-import type { PlanetColor } from "@/store/userStore";
+import type { MileageUse, PlanetColor } from "@/store/userStore";
+import type { Plan } from "@/lib/plan";
 
 export interface ProfileRow {
   id: string;
@@ -11,6 +12,34 @@ export interface ProfileRow {
   level: number;
   streak: number;
   stardust: number;
+  // 0009 마이그레이션 이후에만 존재. 미적용 DB에서는 undefined로 들어온다.
+  level_exp?: number | null;
+  mileage_earned?: number | null;
+  discount_won?: number | null;
+  mileage_use?: MileageUse | null;
+  plan?: Plan | null;
+}
+
+/** 성장/별조각 상태를 DB에 반영 (로그인 상태에서만). */
+export interface ProgressPatch {
+  level: number;
+  level_exp: number;
+  streak: number;
+  stardust: number;
+  mileage_earned: number;
+  discount_won: number;
+  mileage_use: MileageUse;
+  plan: Plan;
+}
+
+export async function saveProgress(p: ProgressPatch): Promise<void> {
+  const sb = getSupabase();
+  const { data: u } = await sb.auth.getUser();
+  if (!u.user) return;
+  const { error } = await sb
+    .from("profiles")
+    .upsert({ id: u.user.id, email: u.user.email, ...p }, { onConflict: "id" });
+  if (error) throw error;
 }
 
 export async function getProfile(): Promise<ProfileRow | null> {

@@ -80,11 +80,20 @@ export default function DiaryDetail() {
   return (
     <>
       <StatusBar />
-      <AppBar back title={formatDate(entry.date).slice(8)} right={
-          <IconButton onClick={onSaveAndHome} ariaLabel="저장하고 홈으로">
-            ⤴
-          </IconButton>
-        } />
+      <AppBar
+        back
+        title={formatDate(entry.date).slice(8)}
+        right={
+          <div style={{ display: "flex", gap: 4 }}>
+            <IconButton onClick={() => nav(`/diary/${entry.id}/edit`)} ariaLabel="일기 수정">
+              ✎
+            </IconButton>
+            <IconButton onClick={onSaveAndHome} ariaLabel="저장하고 홈으로">
+              ⤴
+            </IconButton>
+          </div>
+        }
+      />
       <Body>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontSize: 12, color: "var(--iv-txt2)" }}>{formatDate(entry.date)}</div>

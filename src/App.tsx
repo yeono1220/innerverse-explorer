@@ -17,6 +17,7 @@ import Settings from "./app/screens/Settings";
 import DiaryWrite from "./app/screens/DiaryWrite";
 import EmotionResult from "./app/screens/EmotionResult";
 import DiaryDetail from "./app/screens/DiaryDetail";
+import DiaryEdit from "./app/screens/DiaryEdit";
 import Empty from "./app/screens/Empty";
 import MomoChat from "./app/screens/MomoChat.tsx";
 import DiaryComplete from "./app/screens/DiaryComplete";
@@ -25,6 +26,7 @@ import Quest from "./app/screens/Quest";
 import Condition from "./app/screens/Condition";
 import Inventory from "./app/screens/Inventory";
 import LevelUp from "./app/screens/LevelUp";
+import Plan from "./app/screens/Plan";
 import Galaxy from "./app/screens/Galaxy";
 import FriendPlanet from "./app/screens/FriendPlanet";
 import PastLetter from "./app/screens/PastLetter";
@@ -67,6 +69,7 @@ const App = () => (
             <Route path="/diary/write" element={<DiaryWrite />} />
             <Route path="/diary/empty" element={<Empty />} />
             <Route path="/diary/result/:id" element={<EmotionResult />} />
+            <Route path="/diary/:id/edit" element={<DiaryEdit />} />
             <Route path="/diary/:id" element={<DiaryDetail />} />
 
             {/* 모모 대화 스택 */}
@@ -79,6 +82,7 @@ const App = () => (
             <Route path="/condition" element={<Condition />} />
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/levelup" element={<LevelUp />} />
+            <Route path="/plan" element={<Plan />} />
 
             {/* 탐험 */}
             <Route path="/galaxy" element={<Galaxy />} />

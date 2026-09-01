@@ -6,6 +6,9 @@ import { Card, CapLabel } from "../ui/primitives";
 import { EmotionBar, EmotionDot } from "../ui/emotion";
 import { useDiaryStore, weekSummary, type DiaryEntry } from "@/store/diaryStore";
 import { weeklyReview } from "@/lib/api";
+import { useUserStore } from "@/store/userStore";
+import { limitsFor } from "@/lib/plan";
+import { LongTermPattern } from "../ui/LongTermPattern";
 
 const POS = ["기쁨", "차분", "사랑"];
 
@@ -20,6 +23,8 @@ function entryValence(e: DiaryEntry): number {
 
 export default function WeeklyReview() {
   const entries = useDiaryStore((s) => s.entries);
+  const plan = useUserStore((s) => s.plan);
+  const limits = limitsFor(plan);
   useEffect(() => {
     void useDiaryStore.getState().loadFromDb();
   }, []);
@@ -151,9 +156,15 @@ export default function WeeklyReview() {
 
         <Card variant="purple">
           <div style={{ fontSize: 13.5, lineHeight: 1.6 }}>
-            {ai?.summary ?? "이번 주도 마음을 차곡차곡 기록했어요. 작은 순간들이 행성 위에 쌓이고 있어요 🌱"} — 모모
+            {ai?.summary ?? "이번 주도 마음을 차곡차곡 기록했어요. 작은 순간들이 행성 위에 쌓이고 있어요 🌱"} 
+          </div>
+          <div style={{ fontSize: 13, marginLeft: "auto", justifyContent: "space-between" }}>
+            — 모모 ✨
           </div>
         </Card>
+
+        {/* 장기 패턴 분석 — 구독 전용 */}
+        <LongTermPattern entries={entries} unlocked={limits.longTermAnalysis} />
       </Body>
     </>
   );
