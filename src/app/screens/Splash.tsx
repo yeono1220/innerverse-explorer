@@ -34,7 +34,7 @@ export default function Splash() {
         >
           내 안의 우주를 발견하다
         </h1>
-        <p style={{ fontSize: 13, color: "var(--iv-txt2)", marginTop: 12, letterSpacing: "0.04em" }}>${useUserStore.getState().name}, 시작해요.</p>
+        <p style={{ fontSize: 13, color: "var(--iv-txt2)", marginTop: 12, letterSpacing: "0.04em" }}> 시작해요.</p>
       </div>
       <style>{`
         @keyframes iv-float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
