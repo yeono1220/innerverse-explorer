@@ -22,6 +22,19 @@ export async function signOut() {
   await maybeSupabase()?.auth.signOut();
 }
 
+/**
+ * 회원 탈퇴 — 본인 계정과 소유 데이터 전체를 DB에서 지운다.
+ * 실제 삭제는 supabase/migrations/0010_account_delete.sql 의
+ * delete_own_account() RPC(security definer)가 수행한다.
+ * 성공하면 세션도 함께 정리한다.
+ */
+export async function deleteOwnAccount(): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb.rpc("delete_own_account");
+  if (error) throw error;
+  await sb.auth.signOut();
+}
+
 export async function getSession(): Promise<Session | null> {
   const c = maybeSupabase();
   if (!c) return null;

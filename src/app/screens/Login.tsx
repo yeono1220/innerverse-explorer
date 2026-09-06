@@ -5,6 +5,7 @@ import { StatusBar } from "../ui/layout";
 import { Button } from "../ui/primitives";
 import { Planet2D } from "../ui/planet";
 import { useLoginActions } from "./useLoginActions";
+import { isSupabaseConfigured } from "@/lib/supabase";
 
 export default function Login() {
   const nav = useNavigate();
@@ -33,6 +34,26 @@ export default function Login() {
         <p style={{ fontSize: 13, color: "var(--iv-txt2)", marginTop: 10, lineHeight: 1.6 }}>
           기록한 감정은 당신만의 행성이 되어<br />매일 조금씩 자라납니다.
         </p>
+
+        {/* 서버 연결이 없으면(환경변수 미설정) 기록이 이 기기에만 남는다는 걸 분명히 알린다.
+            베타 테스터가 데모 모드인 줄 모르고 가입해 "계정이 안 생기는" 사고를 막기 위함. */}
+        {!isSupabaseConfigured && (
+          <div
+            style={{
+              marginTop: 14,
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid rgba(232,116,78,.35)",
+              background: "rgba(232,116,78,.08)",
+              fontSize: 11.5,
+              lineHeight: 1.6,
+              color: "var(--iv-txt2)",
+            }}
+          >
+            데모 모드예요 — 서버에 연결되어 있지 않아 <b>계정이 만들어지지 않고</b>,
+            기록은 이 기기에만 남습니다.
+          </div>
+        )}
 
         <div style={{ marginTop: "auto", width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
           {mode === "choose" ? (

@@ -1,6 +1,9 @@
-// 일기 목업 데이터 + write/save 액션. 실제 백엔드 없이 in-memory.
+// 일기 상태 + write/save 액션.
+// 로그인 모드에서는 반드시 "내 계정의 DB 일기"만 담는다(초기값 빈 배열).
+// 목업 데이터는 Supabase 미설정(데모/피치) 모드에서만 씨앗으로 쓴다.
 import { create } from "zustand";
 import { useAppStore } from "./appStore";
+import { isSupabaseConfigured } from "@/lib/supabase";
 
 export type EmotionLabel = "기쁨" | "차분" | "사랑" | "슬픔" | "분노" | "긴장" | "공허";
 
@@ -32,7 +35,8 @@ function dayOffset(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-const MOCK: DiaryEntry[] = [
+/** 데모(Supabase 미설정) 전용 예시 일기. 로그인 모드에서는 절대 쓰이지 않는다. */
+const DEMO_ENTRIES: DiaryEntry[] = [
   {
     id: "d1",
     date: dayOffset(0),
@@ -122,10 +126,13 @@ interface DiaryState {
   byId: (id: string) => DiaryEntry | undefined;
   setEntries: (entries: DiaryEntry[]) => void;
   loadFromDb: () => Promise<void>;
+  /** 로그아웃/계정 전환 시 화면에 남은 이전 사용자 일기를 비운다. */
+  reset: () => void;
 }
 
 export const useDiaryStore = create<DiaryState>((set, get) => ({
-  entries: MOCK,
+  // 로그인 모드: 빈 배열에서 시작해 loadFromDb() 로 내 일기만 채운다.
+  entries: isSupabaseConfigured ? [] : DEMO_ENTRIES,
   add: (e) => {
     const entry: DiaryEntry = { ...e, id: `d${Date.now()}` };
     set({ entries: [entry, ...get().entries] });
@@ -141,18 +148,20 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
   },
   byId: (id) => get().entries.find((e) => e.id === id),
   setEntries: (entries) => set({ entries }),
-  // 로그인 시 DB에서 내 일기 불러오기 (미설정/실패 시 목업 유지)
+  // 로그인 시 DB에서 "내" 일기 불러오기.
+  // 0건이어도 그대로 반영해야 한다 — 예전엔 rows.length 가 0이면 건너뛰어서
+  // 신규 계정이 앞 사용자/목업 일기를 그대로 물려받는 버그가 있었다.
   loadFromDb: async () => {
+    if (!isSupabaseConfigured) return;
     try {
-      const { isSupabaseConfigured } = await import("@/lib/supabase");
-      if (!isSupabaseConfigured) return;
       const { listDiaryEntries } = await import("@/services/diaryApi");
-      const rows = await listDiaryEntries();
-      if (rows.length) set({ entries: rows });
+      set({ entries: await listDiaryEntries() });
     } catch {
-      /* 목업 유지 */
+      // 조회 실패 시에도 남의 일기가 보이면 안 되므로 비운다.
+      set({ entries: [] });
     }
   },
+  reset: () => set({ entries: isSupabaseConfigured ? [] : DEMO_ENTRIES }),
 }));
 
 // 주간 요약 헬퍼

@@ -8,6 +8,7 @@ import { useUserStore, PLANET_COLORS, type PlanetColor } from "@/store/userStore
 import { signUpWithPassword } from "@/services/auth";
 import { saveProfile } from "@/services/profileApi";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { setLastUid } from "@/store/session";
 
 const COLORS: PlanetColor[] = ["green", "purple", "blue", "amber", "love", "void"];
 
@@ -43,6 +44,10 @@ export default function Signup() {
     setErr(null);
     try {
       const data = await signUpWithPassword(email.trim(), pw, trimmed);
+      // 방금 만든 계정을 "현재 사용자"로 먼저 표시해 둔다.
+      // 이걸 빼면 AuthBootstrap이 계정 전환으로 오해하고, 아래에서 고른
+      // 이름·행성 색을 DB에 저장하기도 전에 지워버린다.
+      if (data.user) setLastUid(data.user.id);
       setProfile(trimmed, color);
       if (data.session) {
         // 이메일 인증 OFF → 즉시 로그인됨
@@ -59,14 +64,14 @@ export default function Signup() {
       }
     } catch (e) {
       const msg = (e as Error)?.message || "";
-      // Supabase 서버 미연결(네트워크/미배포) → 데모 모드로 폴백해서 그대로 진입
-      if (/fetch|network|failed|load/i.test(msg)) {
-        setProfile(trimmed, color);
-        login(trimmed, email || `${trimmed}@example.com`);
-        nav("/home", { replace: true });
-        return;
-      }
-      setErr("가입 실패: " + msg);
+      // 예전엔 여기서 조용히 데모 로그인으로 넘어갔다. 그 결과 사용자는 가입에
+      // 성공했다고 믿는데 Supabase auth.users 에는 계정이 없는 상태가 됐다.
+      // 이제는 실패를 그대로 보여주고, 가입은 반드시 서버를 거치게 한다.
+      setErr(
+        /fetch|network|failed to fetch|load/i.test(msg)
+          ? "서버에 연결하지 못해 가입하지 못했어요. 네트워크를 확인하고 다시 시도해 주세요."
+          : "가입 실패: " + msg,
+      );
     } finally {
       setBusy(false);
     }

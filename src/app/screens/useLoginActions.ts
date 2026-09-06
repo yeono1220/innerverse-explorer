@@ -2,7 +2,10 @@
 // Login.tsx 옆에 분리한 "별도 로그인 로직" — 화면(Login.tsx)은 표현만, 로직은 여기서 담당.
 //
 //  · Supabase 설정됨  → 카카오는 OAuth 리다이렉트, 이메일은 비밀번호 로그인.
-//  · Supabase 미설정(또는 서버 미연결) → 데모 모드로 즉시 진입 (기존 목업 동작 보존).
+//                        실패해도 절대 데모로 넘어가지 않는다 — 예전엔 네트워크류
+//                        에러를 데모 로그인으로 삼켜서, 사용자는 "가입됐다"고 믿지만
+//                        DB에는 계정이 없는 유령 계정이 생겼다.
+//  · Supabase 미설정    → 데모 모드로 즉시 진입 (로컬 전용, 기존 목업 동작 보존).
 //
 // 라우트 가드가 없는 SPA라, OAuth 후 /home 으로 복귀하면 AuthBootstrap이
 // 세션→프로필을 하이드레이트한다. (vercel.json 의 SPA rewrite 로 딥링크 복귀 OK)
@@ -15,8 +18,8 @@ import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 // OAuth 후 돌아올 주소. 배포/로컬 모두 현재 origin 기준으로 자동 결정.
 const oauthRedirect = () => `${window.location.origin}/home`;
 
-// "서버에 못 닿음"(네트워크/미배포) 류 에러 → 데모로 폴백 (기존 화면과 동일 판정).
-const isOffline = (msg: string) => /fetch|network|failed|load/i.test(msg);
+// 서버에 못 닿는 경우(네트워크/CORS/미배포)를 사용자에게 그대로 알린다.
+const isOffline = (msg: string) => /fetch|network|failed to fetch|load/i.test(msg);
 
 export function useLoginActions() {
   const nav = useNavigate();
@@ -51,12 +54,11 @@ export function useLoginActions() {
       // 성공 시 브라우저가 카카오로 리다이렉트됨 → 이 아래는 실행되지 않음.
     } catch (e) {
       const msg = (e as Error)?.message || "";
-      if (isOffline(msg)) {
-        demoLogin("카카오 사용자");
-        return;
-      }
-      // 대표적으로 provider 미활성화("Unsupported provider") 등 설정 이슈
-      setError("카카오 로그인을 쓰려면 Supabase에서 카카오 provider를 활성화해야 해요.");
+      setError(
+        isOffline(msg)
+          ? "서버에 연결하지 못했어요. 네트워크를 확인하고 다시 시도해 주세요."
+          : "카카오 로그인을 쓰려면 Supabase에서 카카오 provider를 활성화해야 해요.",
+      );
       setBusy(false);
     }
   };
@@ -78,11 +80,11 @@ export function useLoginActions() {
       goHome();
     } catch (e) {
       const msg = (e as Error)?.message || "";
-      if (isOffline(msg)) {
-        demoLogin(em.split("@")[0], em);
-        return;
-      }
-      setError("로그인 실패 — 이메일/비밀번호를 확인하거나 회원가입해 주세요.");
+      setError(
+        isOffline(msg)
+          ? "서버에 연결하지 못했어요. 네트워크를 확인하고 다시 시도해 주세요."
+          : "로그인 실패 — 이메일/비밀번호를 확인하거나 회원가입해 주세요.",
+      );
     } finally {
       setBusy(false);
     }

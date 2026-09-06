@@ -22,6 +22,8 @@ interface UserState extends Persisted {
   pendingLevelUp: number | null;
   login: (name: string, email: string) => void;
   logout: () => void;
+  /** 기기에 남은 프로필/성장 상태를 기본값으로 되돌린다(계정 전환·탈퇴용). */
+  reset: () => void;
   setProfile: (name: string, color: PlanetColor) => void;
   setPlanetName: (name: string) => void;
   /** 퀘스트·출석 보상 지급. 선택한 사용처(mileageUse)에 따라 자동 적립. 오른 레벨 수 반환. */
@@ -202,6 +204,17 @@ export const useUserStore = create<UserState>((set, get) => {
     logout: () => {
       set({ loggedIn: false });
       persist();
+    },
+    // 로그아웃과 달리 "이 기기에 남은 이전 사용자 흔적"까지 전부 지운다.
+    reset: () => {
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.removeItem(STORAGE_KEY);
+        } catch {
+          /* ignore */
+        }
+      }
+      set({ ...DEFAULT_USER, pendingLevelUp: null });
     },
     setProfile: (name, color) => {
       set({ name, planetColor: color, planetName: `${name}의 행성` });

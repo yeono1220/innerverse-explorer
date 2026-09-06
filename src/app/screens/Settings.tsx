@@ -1,4 +1,5 @@
-// 24 · 설정 (알림 토글 + 테마 + 계정)
+// 24 · 설정 (알림 토글 + 테마 + 계정 + 회원 탈퇴)
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { StatusBar, AppBar, Body } from "../ui/layout";
 import { Card, Toggle } from "../ui/primitives";
@@ -7,6 +8,8 @@ import { useUserStore } from "@/store/userStore";
 import { useAppStore } from "@/store/appStore";
 import { LevelBar } from "../ui/LevelBar";
 import { PLAN_LABEL, PLUS_PRICE_WON } from "@/lib/plan";
+import { clearAndLeave } from "@/store/session";
+import { isSupabaseConfigured } from "@/lib/supabase";
 
 function Row({ label, sub, right }: { label: string; sub?: string; right: React.ReactNode }) {
   return (
@@ -31,9 +34,42 @@ function Row({ label, sub, right }: { label: string; sub?: string; right: React.
 export default function Settings() {
   const nav = useNavigate();
   const user = useUserStore();
-  const logout = useUserStore((s) => s.logout);
   const settings = useAppStore((s) => s.settings);
   const setSetting = useAppStore((s) => s.setSetting);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [leaveInput, setLeaveInput] = useState("");
+  const [leaveBusy, setLeaveBusy] = useState(false);
+  const [leaveErr, setLeaveErr] = useState<string | null>(null);
+
+  // 로그아웃: 세션 종료 + 이 기기에 남은 개인 데이터 삭제 후 전체 새로고침.
+  const onLogout = async () => {
+    try {
+      const { signOut } = await import("@/services/auth");
+      await signOut();
+    } catch {
+      /* 무시 */
+    }
+    clearAndLeave("/login");
+  };
+
+  // 회원 탈퇴: DB의 계정·데이터 전체 삭제 → 세션 종료 → 로컬 데이터 삭제.
+  const onDeleteAccount = async () => {
+    setLeaveErr(null);
+    setLeaveBusy(true);
+    try {
+      const { deleteOwnAccount } = await import("@/services/auth");
+      await deleteOwnAccount();
+      clearAndLeave("/login");
+    } catch (e) {
+      const msg = (e as Error)?.message || "";
+      setLeaveErr(
+        /function .*delete_own_account.*does not exist|schema cache/i.test(msg)
+          ? "탈퇴 기능이 아직 서버에 적용되지 않았어요. (0010_account_delete.sql 실행 필요)"
+          : "탈퇴 처리에 실패했어요: " + msg,
+      );
+      setLeaveBusy(false);
+    }
+  };
 
   return (
     <>
@@ -158,16 +194,7 @@ export default function Settings() {
             </div>
           ))}
           <button
-            onClick={async () => {
-              try {
-                const { signOut } = await import("@/services/auth");
-                await signOut();
-              } catch {
-                /* 무시 */
-              }
-              logout();
-              nav("/login", { replace: true });
-            }}
+            onClick={onLogout}
             style={{
               background: "none",
               border: "none",
@@ -181,6 +208,99 @@ export default function Settings() {
           >
             로그아웃
           </button>
+
+          {isSupabaseConfigured && !confirmLeave && (
+            <button
+              onClick={() => {
+                setConfirmLeave(true);
+                setLeaveInput("");
+                setLeaveErr(null);
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--iv-txt3)",
+                fontSize: 12.5,
+                padding: "10px 4px 2px",
+                cursor: "pointer",
+                textAlign: "left",
+                textDecoration: "underline",
+              }}
+            >
+              회원 탈퇴
+            </button>
+          )}
+
+          {isSupabaseConfigured && confirmLeave && (
+            <div
+              style={{
+                marginTop: 10,
+                padding: 14,
+                borderRadius: 12,
+                border: "1px solid rgba(232,116,78,.35)",
+                background: "rgba(232,116,78,.07)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+              }}
+            >
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--iv-emo-anger)" }}>
+                정말 탈퇴하시겠어요?
+              </div>
+              <div style={{ fontSize: 12, color: "var(--iv-txt2)", lineHeight: 1.6 }}>
+                계정과 함께 일기·감정 기록·모모와의 대화·행성 성장까지 <b>전부 즉시 삭제</b>되고,
+                복구할 수 없어요. 계속하려면 아래에 <b>탈퇴</b> 를 입력해 주세요.
+              </div>
+              <input
+                className="iv-input"
+                value={leaveInput}
+                onChange={(e) => setLeaveInput(e.target.value)}
+                placeholder="탈퇴"
+                aria-label="탈퇴 확인 입력"
+                disabled={leaveBusy}
+              />
+              {leaveErr && (
+                <div style={{ fontSize: 11.5, color: "var(--iv-emo-anger)" }}>{leaveErr}</div>
+              )}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={onDeleteAccount}
+                  disabled={leaveInput.trim() !== "탈퇴" || leaveBusy}
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    borderRadius: 10,
+                    border: "none",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "#fff",
+                    background: "var(--iv-emo-anger)",
+                    opacity: leaveInput.trim() !== "탈퇴" || leaveBusy ? 0.45 : 1,
+                    cursor: leaveInput.trim() !== "탈퇴" || leaveBusy ? "default" : "pointer",
+                  }}
+                >
+                  {leaveBusy ? "삭제 중…" : "탈퇴하고 모두 삭제"}
+                </button>
+                <button
+                  onClick={() => setConfirmLeave(false)}
+                  disabled={leaveBusy}
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    borderRadius: 10,
+                    border: "1px solid var(--iv-line)",
+                    background: "none",
+                    color: "var(--iv-txt2)",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          )}
         </Card>
       </Body>
     </>
