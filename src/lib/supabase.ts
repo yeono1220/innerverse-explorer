@@ -8,6 +8,8 @@ const ANON = env.VITE_SUPABASE_ANON_KEY ?? "";
 
 export const isSupabaseConfigured = Boolean(URL && ANON);
 
+console.log("Supabase configured:", isSupabaseConfigured, "URL:", URL, "ANON:", ANON);
+
 let _client: SupabaseClient | null = null;
 
 export function maybeSupabase(): SupabaseClient | null {
