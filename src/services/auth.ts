@@ -1,4 +1,4 @@
-// 인증 서비스 (Supabase Auth) — 이메일/비밀번호.
+// 인증 서비스 (Supabase Auth) — 이메일/비밀번호 + 익명(데모) 세션.
 import { getSupabase, maybeSupabase } from "@/lib/supabase";
 import type { Session, User } from "@supabase/supabase-js";
 
@@ -16,6 +16,21 @@ export async function signInWithPassword(email: string, password: string) {
   const { data, error } = await getSupabase().auth.signInWithPassword({ email, password });
   if (error) throw error;
   return data;
+}
+
+/**
+ * 세션이 없으면 익명 로그인으로 만든다(데모/심사용 "숨은 로그인").
+ * 대시보드에서 Anonymous sign-ins 가 꺼져 있으면 에러 → 호출부가 무시하고 목업 모드로 남는다.
+ * 이미 세션이 있으면(익명이든 실제 계정이든) 그대로 둔다.
+ */
+export async function ensureAnonymousSession(): Promise<User | null> {
+  const c = maybeSupabase();
+  if (!c) return null;
+  const { data: cur } = await c.auth.getSession();
+  if (cur.session?.user) return cur.session.user;
+  const { data, error } = await c.auth.signInAnonymously();
+  if (error) throw error;
+  return data.user ?? null;
 }
 
 export async function signOut() {
