@@ -50,6 +50,7 @@ export default function Login() {
               color: "var(--iv-txt2)",
             }}
           >
+            isSupabaseConfigured: {isSupabaseConfigured.toString()}<br />
             데모 모드예요 — 서버에 연결되어 있지 않아 <b>계정이 만들어지지 않고</b>,
             기록은 이 기기에만 남습니다.
           </div>

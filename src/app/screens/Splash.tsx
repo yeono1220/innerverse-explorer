@@ -1,15 +1,17 @@
 // 18 · 스플래시 인트로
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useUserStore } from "@/store/userStore";
 import { Planet2D } from "../ui/planet";
 
 export default function Splash() {
   const nav = useNavigate();
+  const loggedIn = useUserStore((s) => s.loggedIn);
 
   useEffect(() => {
-    const t = window.setTimeout(() => nav("/home", { replace: true }), 1400);
+    const t = window.setTimeout(() => nav(loggedIn ? "/home" : "/login", { replace: true }), 1400);
     return () => window.clearTimeout(t);
-  }, [nav]);
+  }, [nav, loggedIn]);
 
   return (
     <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 24 }}>
