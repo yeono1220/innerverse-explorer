@@ -2,6 +2,12 @@
 // 화면이 많으니 한 곳에서 관리. 실제 백엔드 없이 in-memory + 일부 영속화.
 import { create } from "zustand";
 import { todayStr, useUserStore } from "./userStore";
+import {
+  normalizePlacement,
+  randomPlacement,
+  type ItemPlacement,
+} from "@/planet-items/placement";
+import { saveUserItem } from "@/services/inventoryApi";
 
 export interface Friend {
   // id: string;
@@ -54,7 +60,7 @@ const FRIENDS: Friend[] = [
 ];
 
 const NOTIFS: NotificationItem[] = [
-  { id: "n1", type: "letter", title: "과거의 편지가 도착했어요", body: "3개월 전 오늘의 너에게.", time: "3분 전", unread: true },
+  { id: "n1", type: "letter", title: "과거의 편지가 도착했어요", body: "1주 전 오늘의 너에게.", time: "3분 전", unread: true },
   { id: "n2", type: "friend", title: "소연이 행성을 방문했어요", body: "감정 닮음 78%", time: "1시간 전", unread: true },
   { id: "n3", type: "attendance", title: "13일 연속 기록 중!", body: "내일도 함께해요 🌙", time: "오늘", unread: false },
   { id: "n4", type: "review", title: "이번 주 리뷰가 준비됐어요", body: "감정 풍경을 확인해보세요.", time: "어제", unread: false },
@@ -88,6 +94,8 @@ interface AppState {
   quests: Quest[];
   questsDate: string; // quests 완료 상태가 속한 로컬 날짜(YYYY-MM-DD)
   inventory: InventoryItem[];
+  /** 구매/획득한 아이템이 행성 표면 어디에 놓였는지. 홈·글래스 행성이 함께 읽는다. */
+  placements: ItemPlacement[];
   attendance: number[]; // 출석한 일자 인덱스 (0~13)
   condition: { score: number; sleep: number; tags: string[] };
   settings: Settings;
@@ -98,6 +106,8 @@ interface AppState {
   buyItem: (id: string) => boolean;
   /** 레벨업 보상: 아직 없는 아이템 1종을 무료로 지급. 없으면 null. */
   grantLevelReward: () => InventoryItem | null;
+  /** DB(user_items)에서 받아온 보유 목록으로 덮어쓴다. 로그인 복원용. */
+  hydrateInventory: (placements: ItemPlacement[]) => void;
   setCondition: (score: number, sleep: number, tags: string[]) => void;
   setSetting: <K extends keyof Settings>(k: K, v: Settings[K]) => void;
   addFriend: (code: string) => boolean;
@@ -134,14 +144,74 @@ function saveQuests(quests: Quest[], questsDate: string) {
   }
 }
 
+const INVENTORY_KEY = "innerverse.inventory";
+
+// 보유 아이템과 설치 위치를 이 브라우저에 저장한다.
+// (로그인 상태면 DB에도 남지만, 비로그인/목업 모드에서도 구매가 유지되도록)
+function loadInventory(base: InventoryItem[]): {
+  inventory: InventoryItem[];
+  placements: ItemPlacement[];
+} {
+  if (typeof window === "undefined") return { inventory: base, placements: [] };
+  try {
+    const raw = window.localStorage.getItem(INVENTORY_KEY);
+    if (!raw) return { inventory: base, placements: [] };
+    const saved = JSON.parse(raw) as { placements?: unknown[] };
+    const placements = (saved.placements ?? [])
+      .map(normalizePlacement)
+      .filter((p): p is ItemPlacement => !!p)
+      // 카탈로그에 없는 옛 아이템 id는 버린다.
+      .filter((p) => base.some((i) => i.id === p.itemId));
+    const owned = new Set(placements.map((p) => p.itemId));
+    return {
+      inventory: base.map((i) => ({ ...i, owned: owned.has(i.id) })),
+      placements,
+    };
+  } catch {
+    return { inventory: base, placements: [] };
+  }
+}
+
+function saveInventory(placements: ItemPlacement[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(INVENTORY_KEY, JSON.stringify({ placements }));
+  } catch {
+    /* ignore */
+  }
+}
+
 const INIT_QUESTS = loadQuests(QUESTS);
+const INIT_INVENTORY = loadInventory(INVENTORY);
+
+/**
+ * 아이템 1종을 보유 상태로 만들고 행성 표면 위 자리를 정한다.
+ * 구매(buyItem)와 레벨업 보상(grantLevelReward)이 공유하는 단일 경로.
+ */
+function acquire(
+  set: (partial: Partial<AppState>) => void,
+  get: () => AppState,
+  id: string,
+) {
+  if (get().placements.some((p) => p.itemId === id)) return;
+  const placement = randomPlacement(id, get().placements);
+  const placements = [...get().placements, placement];
+  set({
+    inventory: get().inventory.map((i) => (i.id === id ? { ...i, owned: true } : i)),
+    placements,
+  });
+  saveInventory(placements);
+  // 로그인 + Supabase 연결 상태에서만 실제로 기록된다(내부에서 가드).
+  void saveUserItem(placement).catch(() => undefined);
+}
 
 export const useAppStore = create<AppState>((set, get) => ({
   friends: FRIENDS,
   notifications: NOTIFS,
   quests: INIT_QUESTS.quests,
   questsDate: INIT_QUESTS.questsDate,
-  inventory: INVENTORY,
+  inventory: INIT_INVENTORY.inventory,
+  placements: INIT_INVENTORY.placements,
   attendance: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], // 13일 연속
   condition: { score: 72, sleep: 7, tags: ["피곤", "차분"] },
   settings: { notifPush: true, notifLetter: true, notifFriend: true, weekStart: "mon", theme: "dark" },
@@ -171,19 +241,37 @@ export const useAppStore = create<AppState>((set, get) => ({
     useUserStore.getState().earnMileage(q.reward);
   },
   // 별조각 잔액에서 실제로 차감한다. 잔액이 모자라면 구매 실패.
+  // 성공하면 그 자리에서 행성 위 랜덤 위치가 정해지고, 로컬(+로그인 시 DB)에 남는다.
   buyItem: (id) => {
     const item = get().inventory.find((i) => i.id === id);
     if (!item || item.owned) return false;
     if (!useUserStore.getState().spendMileage(item.price)) return false;
-    set({ inventory: get().inventory.map((i) => (i.id === id ? { ...i, owned: true } : i)) });
+    acquire(set, get, id);
     return true;
   },
   grantLevelReward: () => {
     const locked = get().inventory.filter((i) => !i.owned);
     if (locked.length === 0) return null;
     const pick = locked[Math.floor(Math.random() * locked.length)];
-    set({ inventory: get().inventory.map((i) => (i.id === pick.id ? { ...i, owned: true } : i)) });
+    acquire(set, get, pick.id); // 보상도 구매와 똑같이 행성에 설치된다
     return { ...pick, owned: true };
+  },
+  // DB가 단일 출처. 로컬에만 있던 항목이 사라지지 않도록 합집합으로 합친다.
+  hydrateInventory: (placements) => {
+    const merged = [...placements];
+    get().placements.forEach((local) => {
+      if (!merged.some((p) => p.itemId === local.itemId)) merged.push(local);
+    });
+    const owned = new Set(merged.map((p) => p.itemId));
+    set({
+      placements: merged,
+      inventory: get().inventory.map((i) => ({ ...i, owned: owned.has(i.id) })),
+    });
+    saveInventory(merged);
+    // 로컬에만 있던 것들은 이번 기회에 DB로 밀어 올린다.
+    merged
+      .filter((p) => !placements.some((d) => d.itemId === p.itemId))
+      .forEach((p) => void saveUserItem(p).catch(() => undefined));
   },
   setCondition: (score, sleep, tags) => {
     set({ condition: { score, sleep, tags } });

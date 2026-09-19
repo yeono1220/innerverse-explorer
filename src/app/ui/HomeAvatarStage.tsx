@@ -7,6 +7,7 @@ import { MomoCharacter } from "@/diorama/MomoCharacter";
 import { useCurrentStage } from "@/diorama/growth";
 import { useEmotionStore, BRANCH } from "@/store/emotionStore";
 import { useUserStore, PLANET_COLORS, type PlanetColor } from "@/store/userStore";
+import { PlanetItems } from "@/planet-items/PlanetItems";
 
 interface Props {
   size?: number;
@@ -137,6 +138,9 @@ function PlanetWithMomo({
         <sphereGeometry args={[0.64, 32, 32]} />
         <meshBasicMaterial color={tone.mid} transparent opacity={0.08} side={THREE.BackSide} />
       </mesh>
+
+      {/* 인벤토리에서 구매한 아이템 — /glass 행성과 같은 자리에 놓인다 */}
+      <PlanetItems radius={0.6} ratio={0.34} />
 
       {/* 행성 표면 위 모모 — 새 표면 (0.6) 위에 살짝 띄움 */}
       <group position={[0, 0.6, 0]}>

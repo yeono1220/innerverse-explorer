@@ -7,7 +7,9 @@ import { useEffect } from "react";
 import { ensureAnonymousSession, getSession, onAuthChange } from "@/services/auth";
 import { seedDemoUniverseIfNeeded } from "@/services/demoSeed";
 import { getProfile, saveProgress } from "@/services/profileApi";
+import { fetchUserItems } from "@/services/inventoryApi";
 import { useUserStore } from "@/store/userStore";
+import { useAppStore } from "@/store/appStore";
 import { useDiaryStore } from "@/store/diaryStore";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { START_LEVEL } from "@/lib/level";
@@ -84,6 +86,12 @@ export function AuthBootstrap() {
       } catch {
         /* 프로필 조회 실패 — 일기 로딩은 아래에서 계속 진행 */
       }
+      // 보유 아이템 + 행성 위 설치 위치 복원 (테이블/컬럼이 없으면 null → 로컬 유지)
+      if (active) {
+        const items = await fetchUserItems().catch(() => null);
+        if (active && items) useAppStore.getState().hydrateInventory(items);
+      }
+
       // 프로필 조회 성공 여부와 무관하게 "내 일기"로 교체한다.
       // (여기서 건너뛰면 화면에 이전 사용자 목록이 남는다)
       if (active) await useDiaryStore.getState().loadFromDb();

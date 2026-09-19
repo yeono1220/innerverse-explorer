@@ -213,7 +213,7 @@ export default function Home() {
             <div style={{ fontSize: 26 }}>💌</div>
             <div style={{ flex: 1 }}>
               <div className="iv-card-title">과거의 편지가 도착했어요</div>
-              <div className="iv-card-sub">3개월 전의 너에게서</div>
+              <div className="iv-card-sub">1주 전의 너에게서</div>
             </div>
             <div style={{ color: "var(--iv-purple2)", fontSize: 18 }}>›</div>
           </div>

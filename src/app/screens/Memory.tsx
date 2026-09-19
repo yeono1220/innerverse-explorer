@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { StatusBar, AppBar, Body } from "../ui/layout";
 import { Card, Button, CapLabel } from "../ui/primitives";
 import { getMemory, reflect, deleteFact, deleteRelation, type Memory } from "@/services/memory";
+import { isSupabaseConfigured } from "@/lib/supabase";
 
 function DelRow({ left, onDel }: { left: React.ReactNode; onDel: () => void }) {
   return (
@@ -59,14 +60,14 @@ export default function Memory() {
         <CapLabel>MEMORY · 모모가 기억하는 나</CapLabel>
 
         <Card>
-          <div className="iv-section-h">③ 사실 요약</div>
+          <div className="iv-section-h">사실 요약</div>
           <p style={{ fontSize: 13, color: "var(--iv-txt2)", lineHeight: 1.6 }}>
             {mem?.factSummary || "아직 충분한 기록이 없어요. 일기를 쌓으면 모모가 ‘나’를 알아가요."}
           </p>
         </Card>
 
         <Card>
-          <div className="iv-section-h">④ 성향·패턴</div>
+          <div className="iv-section-h">성향·패턴</div>
           <p style={{ fontSize: 13, color: "var(--iv-txt2)", lineHeight: 1.6 }}>{mem?.personaSummary || "—"}</p>
         </Card>
 
@@ -119,8 +120,8 @@ export default function Memory() {
           )}
         </Card>
 
-        <Button block onClick={refresh} disabled={busy}>
-          {busy ? "기억 갱신 중…" : "지금 기억 갱신하기"}
+        <Button block onClick={refresh} disabled={busy || !isSupabaseConfigured}>
+          {busy ? "기억 갱신 중…" : isSupabaseConfigured ? "지금 기억 갱신하기" : "Supabase 연결 및 로그인 필요"}
         </Button>
         <p style={{ fontSize: 11, color: "var(--iv-txt3)", lineHeight: 1.6, marginTop: 8 }}>
           모든 기억은 당신의 동의 하에 저장되고, ✕로 언제든 지울 수 있어요(잊기). 삭제하면 모모도 더는 기억하지 않아요.
