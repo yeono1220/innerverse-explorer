@@ -186,7 +186,7 @@ export default function MomoChat() {
           <div style={{ padding: "0 18px 8px" }}>
             <PlanNotice
               title="오늘의 대화를 다 썼어요"
-              body="무료 플랜은 하루 15턴이에요. 플러스로 바꾸면 모모와 무제한으로 이야기할 수 있어요."
+              body={`베타 기간에는 하루 ${limitsFor(plan).chatTurnsPerDay}턴까지 대화할 수 있어요. 오늘 나눈 이야기는 일기로 남겨두고, 내일 다시 만나요.`}
             />
           </div>
         )}

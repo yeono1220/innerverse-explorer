@@ -15,16 +15,22 @@ export interface PlanLimits {
   rawRetentionWeeks: number;
 }
 
+// 데모/심사 기간 모모챗 하루 상한. 플러스로 전환해도 이 값이 적용된다
+// (결제 없이 즉시 전환되는 버튼이 있어 무제한이 열리면 LLM 비용 상한이 사라짐).
+// 실제 결제가 붙으면 plus 의 chatTurnsPerDay 를 Infinity 로 되돌릴 것.
+export const DEMO_CHAT_TURNS_PER_DAY = 10;
+
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   free: {
-    chatTurnsPerDay: 15,
+    chatTurnsPerDay: DEMO_CHAT_TURNS_PER_DAY,
     diaryPerWeek: 5,
     weeklyReview: true,
     longTermAnalysis: false,
     rawRetentionWeeks: 1,
   },
   plus: {
-    chatTurnsPerDay: Infinity,
+    chatTurnsPerDay: DEMO_CHAT_TURNS_PER_DAY, // 데모 기간: 무제한 대신 동일 상한
+
     diaryPerWeek: Infinity,
     weeklyReview: true,
     longTermAnalysis: true,
