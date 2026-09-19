@@ -45,7 +45,7 @@ begin
   end if;
 
   -- 프로필 행 확보 + 잠금 (트리거가 이미 만들었을 수도, 아닐 수도 있다)
-  insert into public.profiles (id) values (uid) on conflict (id) do nothing;
+  insert into public.profiles (id, nickname, planet_name) values (uid, '이음', '이음의 행성') on conflict (id) do nothing;
   select p.demo_seeded_at into already from public.profiles p where p.id = uid for update;
   if already is not null then
     return;

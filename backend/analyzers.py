@@ -364,6 +364,11 @@ class ClaudeAnalyzer(_LLMAnalyzer):
             self._client = anthropic.Anthropic(
                 api_key=settings.ANTHROPIC_API_KEY,
                 timeout=settings.REQUEST_TIMEOUT,
+                # 조직 레벨 키 대응: 워크스페이스 ID 가 있으면 모든 요청에 헤더로 붙인다.
+                default_headers=(
+                    {"anthropic-workspace-id": settings.ANTHROPIC_WORKSPACE_ID}
+                    if settings.ANTHROPIC_WORKSPACE_ID else None
+                ),
             )
         return self._client
 

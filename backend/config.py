@@ -67,6 +67,9 @@ class Settings:
     # ── Claude(Anthropic) 설정 ──
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
     CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
+    # 워크스페이스에 묶이지 않은(조직 레벨) 키는 요청마다 anthropic-workspace-id 헤더가 필요하다.
+    # 워크스페이스 스코프 키를 쓰면 비워 둬도 된다.
+    ANTHROPIC_WORKSPACE_ID: str = os.getenv("ANTHROPIC_WORKSPACE_ID", "")
 
     # ── 텍스트 생성(모모 답장 등) 온도 ──
     GEN_TEMPERATURE: float = float(os.getenv("GEN_TEMPERATURE", "0.6"))
