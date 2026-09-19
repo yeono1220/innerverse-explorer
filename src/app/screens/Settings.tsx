@@ -42,6 +42,7 @@ export default function Settings() {
   const [leaveErr, setLeaveErr] = useState<string | null>(null);
 
   // 로그아웃: 세션 종료 + 이 기기에 남은 개인 데이터 삭제 후 전체 새로고침.
+  // 로그인 화면은 비활성이라 스플래시("/")로 보내면 AuthBootstrap 이 새 익명 우주를 만든다.
   const onLogout = async () => {
     try {
       const { signOut } = await import("@/services/auth");
@@ -49,7 +50,7 @@ export default function Settings() {
     } catch {
       /* 무시 */
     }
-    clearAndLeave("/login");
+    clearAndLeave("/");
   };
 
   // 회원 탈퇴: DB의 계정·데이터 전체 삭제 → 세션 종료 → 로컬 데이터 삭제.
@@ -59,7 +60,7 @@ export default function Settings() {
     try {
       const { deleteOwnAccount } = await import("@/services/auth");
       await deleteOwnAccount();
-      clearAndLeave("/login");
+      clearAndLeave("/");
     } catch (e) {
       const msg = (e as Error)?.message || "";
       setLeaveErr(

@@ -1,8 +1,11 @@
 // Supabase 세션 ↔ userStore/diaryStore 브리지.
 // 로그인/세션 복원 시 프로필을 userStore에 채우고 DB 일기를 불러온다.
+// 세션이 없으면 익명 로그인을 걸어 "숨은 로그인" 상태로 만들고(데모/심사용),
+// 익명 방문자의 첫 진입에는 템플릿 우주(일기·기억)를 시드한다.
 // Supabase 미설정이면 아무것도 안 함(목업 모드 유지).
 import { useEffect } from "react";
-import { getSession, onAuthChange } from "@/services/auth";
+import { ensureAnonymousSession, getSession, onAuthChange } from "@/services/auth";
+import { seedDemoUniverseIfNeeded } from "@/services/demoSeed";
 import { getProfile, saveProgress } from "@/services/profileApi";
 import { useUserStore } from "@/store/userStore";
 import { useDiaryStore } from "@/store/diaryStore";
@@ -46,6 +49,12 @@ export function AuthBootstrap() {
       if (getLastUid() !== user.id) clearLocalUserData();
       setLastUid(user.id);
 
+      // 익명(데모) 방문자의 첫 진입: 프로필·일기·기억 시드. 프로필을 읽기 전에 끝나야 한다.
+      if (user.is_anonymous) {
+        await seedDemoUniverseIfNeeded().catch(() => false);
+        if (!active) return;
+      }
+
       try {
         const p = await getProfile();
         if (!active || !p) return;
@@ -81,7 +90,14 @@ export function AuthBootstrap() {
     };
 
     getSession().then((s) => {
-      if (s?.user) hydrate(s.user);
+      if (s?.user) {
+        hydrate(s.user);
+        return;
+      }
+      // 세션이 없으면 익명 로그인 → onAuthChange(SIGNED_IN) 이 hydrate 를 이어받는다.
+      ensureAnonymousSession().catch((e) => {
+        console.warn("[auth] 익명 로그인 실패 — 목업 모드로 계속:", (e as Error)?.message);
+      });
     });
 
     const unsub = onAuthChange((user) => {
