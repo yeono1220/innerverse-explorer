@@ -501,3 +501,28 @@
     radial-gradient(1.2px 1.2px at 64% 14%, #fff 60%, transparent 100%);
   opacity: 0.55;
 }
+
+/* 폰 위(스테이지) 리드 문구 — 특정 화면(/diary 등)에서만 폰 위에 노출.
+   글래스 뷰의 .iv-lead 와 동일한 톤/크기로 맞춤. */
+.iv-page-lead {
+  max-width: 392px;
+  text-align: center;
+  margin-bottom: 18px;
+}
+.iv-page-lead .iv-k {
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  color: var(--iv-purple2);
+  font-weight: 700;
+}
+.iv-page-lead h1 {
+  font-size: 21px;
+  font-weight: 800;
+  margin-top: 6px;
+}
+.iv-page-lead p {
+  font-size: 12.5px;
+  color: var(--iv-txt2);
+  margin-top: 8px;
+  line-height: 1.6;
+}

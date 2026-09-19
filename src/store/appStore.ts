@@ -4,7 +4,8 @@ import { create } from "zustand";
 import { todayStr, useUserStore } from "./userStore";
 
 export interface Friend {
-  id: string;
+  // id: string;
+  // id 대신 code를 고유 식별자로 사용. 친구 추가 시 코드로 검색.
   name: string;
   planetColor: "green" | "purple" | "blue" | "amber" | "love" | "void";
   similarity: number; // 0~100
@@ -47,9 +48,9 @@ interface Settings {
 }
 
 const FRIENDS: Friend[] = [
-  { id: "f1", name: "소연", planetColor: "love", similarity: 78, code: "SOYEON-2210", lastEmotion: "차분" },
-  { id: "f2", name: "지훈", planetColor: "blue", similarity: 64, code: "JIHUN-1099", lastEmotion: "긴장" },
-  { id: "f3", name: "민서", planetColor: "amber", similarity: 52, code: "MINSEO-7341", lastEmotion: "기쁨" },
+  { /*id: "f1",*/ name: "SOYEON", planetColor: "love", similarity: 78, code: "SOYEON-2210", lastEmotion: "차분" },
+  { /*id: "f2",*/ name: "JIHUN", planetColor: "blue", similarity: 64, code: "JIHUN-1099", lastEmotion: "긴장" },
+  { /*id: "f3",*/ name: "MINSEO", planetColor: "amber", similarity: 52, code: "MINSEO-7341", lastEmotion: "기쁨" },
 ];
 
 const NOTIFS: NotificationItem[] = [
@@ -195,7 +196,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (get().friends.some((friend) => friend.code.trim().toUpperCase() === normalizedCode)) return false;
     const name = normalizedCode.split(/[-_]/)[0]?.slice(0, 6) || "친구";
     const f: Friend = {
-      id: `f${Date.now()}`,
+      // id: `f${Date.now()}`,
       name,
       planetColor: "purple",
       similarity: Math.floor(40 + Math.random() * 50),

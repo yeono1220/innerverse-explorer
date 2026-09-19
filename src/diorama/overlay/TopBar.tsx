@@ -16,10 +16,10 @@ export function TopBar() {
       <div>
         <div className="iv-cap">MY ASTEROID</div>
         <h2>{planetName}</h2>
-        <div className="iv-lvl">
+        {/* <div className="iv-lvl">
           <span className="iv-lvlpill">{b.lvl}</span>
           <span>구조물 {count}개 · {b.ds}</span>
-        </div>
+        </div> */}
       </div>
       <button className="iv-iconbtn" onClick={() => nav(-1)} aria-label="뒤로">
         ←

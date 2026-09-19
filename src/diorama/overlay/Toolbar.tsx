@@ -40,7 +40,7 @@ export function Toolbar() {
           👣 산책
         </button>
       </div>
-
+      {/*
       <button
         className="iv-dioramatone"
         onClick={() => setOpenTone((v) => !v)}
@@ -49,6 +49,7 @@ export function Toolbar() {
       >
         🎨
       </button>
+      */}
 
       {openTone && (
         <div className="iv-dioramatonepanel" role="listbox" aria-label="행성 톤">

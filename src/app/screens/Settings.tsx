@@ -143,7 +143,8 @@ export default function Settings() {
           <div className="iv-section-h">바로가기</div>
           {[
             { label: "모모의 기억", to: "/memory", emoji: "🧠" },
-            { label: "친구 찾기", to: "/friend/add", emoji: "👥" },
+            // { label: "친구 찾기", to: "/friend/add", emoji: "👥" },
+            // 친구 찾기는 향후 업데이트 예정
             { label: "은하수 보기", to: "/galaxy", emoji: "🌌" },
             { label: "인벤토리", to: "/inventory", emoji: "🎁" },
             { label: "5분기 진화 갤러리", to: "/branches", emoji: "🌳" },

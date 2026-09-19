@@ -2,9 +2,27 @@
 import { ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
+// 폰 위(스테이지)에 띄우는 리드 문구. 경로별로 정의 — 정의된 화면에서만 노출된다.
+const PAGE_LEAD: Record<string, { k: string; h1: string; p: string }> = {
+  "/diary": {
+    k: "diary record",
+    h1: "이미 기록해둔 감정,\n언제든 다시 꺼내볼 수 있어요",
+    p: "지난날의 마음을 천천히, 편하게 다시 들여다봐요.",
+  },
+};
+
 export function PhoneFrame({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  const lead = PAGE_LEAD[pathname];
   return (
     <div className="iv-page">
+      {lead && (
+        <div className="iv-page-lead">
+          <div className="iv-k">{lead.k}</div>
+          <h1 style={{ whiteSpace: "pre-line" }}>{lead.h1}</h1>
+          <p>{lead.p}</p>
+        </div>
+      )}
       <div className="iv-phone">
         <div className="iv-phone-notch" />
         <div className="iv-phone-screen">{children}</div>
