@@ -38,12 +38,14 @@ export default function DiaryList() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
-        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, margin: "0 -4px" }}>
-          {FILTERS.map((f) => (
-            <Chip key={f} active={f === filter} onClick={() => setFilter(f)}>
-              {f}
-            </Chip>
-          ))}
+        <div style={{ flex: "0 0 auto", minHeight: 36 }}>
+          <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, margin: "0 -4px" }}>
+            {FILTERS.map((f) => (
+              <Chip key={f} active={f === filter} onClick={() => setFilter(f)}>
+                {f}
+              </Chip>
+            ))}
+          </div>
         </div>
 
         {list.length === 0 ? (
