@@ -10,6 +10,7 @@ import { planetRot, walkInput } from "@/glass-momo/sharedRefs";
 import { useEmotionStore, BRANCH, EMO7, type Emo7 } from "@/store/emotionStore";
 import { Structures } from "./Structures";
 import { Momo } from "./Momo";
+import { PlanetItems } from "@/planet-items/PlanetItems";
 
 // 7감정 → 행성 색(분기 tint). 감정 비율로 연속 블렌딩.
 const EMO_TINT: Record<Emo7, THREE.Color> = {
@@ -162,6 +163,9 @@ export function Planet() {
         </mesh>
 
         <Structures />
+
+        {/* 인벤토리에서 구매한 아이템 — 홈 행성과 같은 자리에 놓인다 */}
+        <PlanetItems radius={PLANET_RADIUS} ratio={0.26} />
       </group>
 
       {/* 모모는 회전 그룹 밖 — 화면에 고정, 행성만 굴러간다 */}
