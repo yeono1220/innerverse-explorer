@@ -99,7 +99,7 @@ const DEMO_ENTRIES: DiaryEntry[] = [
   },
   {
     id: "d5",
-    date: dayOffset(6),
+    date: dayOffset(5),
     preview: "아무 일도 일어나지 않은 하루.",
     body: "아무 일도 일어나지 않은 하루. 그게 이상하게 무서웠다.",
     audioSec: 12,
@@ -111,6 +111,32 @@ const DEMO_ENTRIES: DiaryEntry[] = [
     ],
     keywords: ["공허", "정적"],
     primary: "공허",
+  },
+  {
+    id: "d6",
+    date: dayOffset(6),
+    preview: "차분히 걸은 하루.",
+    body: "점심에 잠깐 걷고 커피를 마셨다. 별일 없이 차분했다.",
+    audioSec: 0,
+    emotions: [
+      { label: "차분", pct: 60 },
+      { label: "기쁨", pct: 40 },
+    ],
+    keywords: ["산책", "커피"],
+    primary: "차분",
+  },
+  {
+    id: "d7",
+    date: dayOffset(7),
+    preview: "오랜만에 운동",
+    body: "저녁에 30분 걷고 스트레칭했다. 몸이 가벼웠다.",
+    audioSec: 0,
+    emotions: [
+      { label: "기쁨", pct: 70 },
+      { label: "차분", pct: 30 },
+    ],
+    keywords: ["운동", "걷고", "스트레칭"],
+    primary: "기쁨",
   },
 ];
 

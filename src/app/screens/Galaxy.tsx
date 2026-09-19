@@ -33,11 +33,11 @@ export default function Galaxy() {
             overflow: "hidden",
             background: wallpaperMode
               ? "radial-gradient(ellipse at center, #1a0e34 0%, #06040c 70%)"
-              : "var(--iv-surf)",
+              : "transparent",
             border: "1px solid var(--iv-line)",
           }}
         >
-          <div className="iv-stars" />
+          {wallpaperMode && <div className="iv-stars" />}
 
           {planets.length === 0 ? (
             <div
@@ -58,8 +58,6 @@ export default function Galaxy() {
             >
               <div style={{ fontSize: 30, opacity: 0.7 }}>🌌</div>
               아직 감정 행성이 없어요.
-              <br />
-              일기 7개가 모이면 새 행성을 만들 수 있어요.
             </div>
           ) : (
             planets.map((p, i) => {
@@ -93,17 +91,16 @@ export default function Galaxy() {
           <style>{`@keyframes iv-bob { 0%,100% { transform: translate(-50%,-50%) translateY(0) } 50% { transform: translate(-50%,-50%) translateY(-6px) } }`}</style>
         </div>
 
-        {!wallpaperMode && (
-          <div style={{ fontSize: 11.5, color: "var(--iv-txt3)", textAlign: "center", marginTop: -4 }}>
-            행성을 누르면 그 7일의 감정 요약을 볼 수 있어요.
-          </div>
-        )}
+        
+        <div style={{ fontSize: 11.5, color: "var(--iv-txt3)", textAlign: "center", marginTop: -4 }}>
+          행성을 누르면 그 7일의 감정 요약을 볼 수 있어요.
+        </div>
 
         <Card size="sm">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
               <div className="iv-card-title">배경화면 모드</div>
-              <div className="iv-card-sub">UI 없이 행성만 보여요</div>
+              <div className="iv-card-sub">밤하는 배경 없이 행성만 보여요</div>
             </div>
             <Toggle on={wallpaperMode} onChange={setWallpaperMode} />
           </div>

@@ -230,7 +230,7 @@ export default function DiaryList() {
             </div>
             <div style={{ marginTop: 8, fontSize: 12, color: "var(--iv-txt2)", lineHeight: 1.6 }}>
               {fmtShort(preview.startDate)}~{fmtShort(preview.endDate)}의 마음이에요.<br />
-              가장 강한 감정은 <b style={{ color: "var(--iv-purple2)" }}>‘{preview.dominant}’</b> — 그 색의 행성이 돼요.
+              가장 강한 감정은 <b style={{ color: "var(--iv-purple2)" }}>‘{preview.dominant}’</b>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
               <Button variant="ghost" block onClick={onLater}>나중에</Button>

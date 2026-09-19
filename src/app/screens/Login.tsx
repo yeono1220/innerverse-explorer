@@ -9,7 +9,7 @@ import { isSupabaseConfigured } from "@/lib/supabase";
 
 export default function Login() {
   const nav = useNavigate();
-  const { busy, error, loginWithKakao, loginWithEmail } = useLoginActions();
+  const { busy, error, /*loginWithKakao,*/ loginWithEmail } = useLoginActions();
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [mode, setMode] = useState<"choose" | "email">("choose");
@@ -58,10 +58,11 @@ export default function Login() {
 
         <div style={{ marginTop: "auto", width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
           {mode === "choose" ? (
-            <>
-              <Button /*block onClick={loginWithKakao} disabled={busy} style={{ background: "#FEE500", color: "#181600" }}*/>
+            <>{/* 카카오는 추후 연동할 계획
+              <Button /*block onClick={loginWithKakao} disabled={busy} style={{ background: "#FEE500", color: "#181600" }}>
                 💬 카카오로 3초 만에 시작
               </Button>
+              */}
               <Button block variant="ghost" onClick={() => setMode("email")}>
                 ✉️ 이메일로 시작
               </Button>
