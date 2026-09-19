@@ -9,6 +9,7 @@ import { EmotionBar } from "../ui/emotion";
 import { useUserStore, todayStr, REWARDS } from "@/store/userStore";
 import { useAppStore } from "@/store/appStore";
 import { useDiaryStore, weekSummary } from "@/store/diaryStore";
+import { useGalaxyStore } from "@/store/galaxyStore";
 import { STAGES, STAGE_LIST, streakToStage } from "@/diorama/growth";
 
 export default function Home() {
@@ -24,6 +25,7 @@ export default function Home() {
   // 오늘 것이 아니면(날짜 지남) 0으로 표시
   const questDone = questsDate === todayStr() ? quests.filter((q) => q.done).length : 0;
   const entries = useDiaryStore((s) => s.entries);
+  const planetCount = useGalaxyStore((s) => s.planets.length);
   const summary = weekSummary(entries.slice(0, 5)).slice(0, 3);
   const stage = streakToStage(user.streak);
   const stageSpec = STAGES[stage];
@@ -202,7 +204,7 @@ export default function Home() {
           <Card size="sm" onClick={() => nav("/galaxy")}>
             <div style={{ fontSize: 22 }}>🌌</div>
             <div className="iv-card-title">은하수</div>
-            <div className="iv-card-sub">{entries.length}개의 행성</div>
+            <div className="iv-card-sub">{planetCount}개의 행성</div>
           </Card>
         </div>
 

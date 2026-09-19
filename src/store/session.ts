@@ -5,6 +5,7 @@
 // 일기·레벨·행성 이름을 그대로 보게 된다. 그 정리를 여기서 한곳에 모은다.
 import { useDiaryStore } from "./diaryStore";
 import { useUserStore } from "./userStore";
+import { useGalaxyStore } from "./galaxyStore";
 
 /** 앱이 localStorage 에 쓰는 키는 전부 이 접두사를 쓴다. */
 const LOCAL_PREFIX = "innerverse.";
@@ -51,6 +52,7 @@ export function clearLocalUserData() {
   // 화면이 이미 들고 있는 메모리 상태도 즉시 비운다.
   useDiaryStore.getState().reset();
   useUserStore.getState().reset();
+  useGalaxyStore.getState().reset();
 }
 
 /**
