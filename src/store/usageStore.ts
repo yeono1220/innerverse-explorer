@@ -25,6 +25,11 @@ interface UsageState extends Persisted {
   canWriteDiary: () => boolean;
   diaryLeft: () => number;
   consumeDiary: () => boolean;
+  /**
+   * DB 사용량으로 복원. 같은 날/주면 "더 많이 쓴 쪽"을 채택한다.
+   * (localStorage 를 지워 한도를 우회하는 걸 막기 위해 min 이 아니라 max)
+   */
+  hydrate: (p: { day: string | null; chatTurns: number; week: string | null; diaryCount: number }) => void;
   reset: () => void;
 }
 
@@ -105,6 +110,19 @@ export const useUsageStore = create<UsageState>((set, get) => ({
     set({ diaryCount: next.diaryCount });
     save({ day: next.day, chatTurns: next.chatTurns, week: next.week, diaryCount: next.diaryCount });
     return true;
+  },
+  hydrate: (p) => {
+    get().ensureFresh(); // 먼저 오늘/이번 주 기준으로 맞춰 둔다
+    const s = get();
+    const next: Persisted = {
+      day: s.day,
+      week: s.week,
+      // DB 값이 다른 날짜의 것이면 무시한다(이미 리셋된 카운터).
+      chatTurns: p.day === s.day ? Math.max(s.chatTurns, p.chatTurns) : s.chatTurns,
+      diaryCount: p.week === s.week ? Math.max(s.diaryCount, p.diaryCount) : s.diaryCount,
+    };
+    set(next);
+    save(next);
   },
   reset: () => {
     const next: Persisted = { day: todayStr(), chatTurns: 0, week: weekKey(), diaryCount: 0 };

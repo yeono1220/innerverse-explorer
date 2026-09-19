@@ -7,9 +7,8 @@ import { useEffect } from "react";
 import { ensureAnonymousSession, getSession, onAuthChange } from "@/services/auth";
 import { seedDemoUniverseIfNeeded } from "@/services/demoSeed";
 import { getProfile, saveProgress } from "@/services/profileApi";
-import { fetchUserItems } from "@/services/inventoryApi";
+import { hydrateFromCloud, watchCloudSync } from "@/services/cloudSync";
 import { useUserStore } from "@/store/userStore";
-import { useAppStore } from "@/store/appStore";
 import { useDiaryStore } from "@/store/diaryStore";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { START_LEVEL } from "@/lib/level";
@@ -21,6 +20,7 @@ export function AuthBootstrap() {
     if (!isSupabaseConfigured) return;
     let active = true;
     let unsubProgress: (() => void) | null = null;
+    let unsubCloud: (() => void) | null = null;
     let timer: number | null = null;
 
     // 성장 상태가 바뀌면 DB에 반영 (연타 방지를 위해 짧게 디바운스).
@@ -86,10 +86,14 @@ export function AuthBootstrap() {
       } catch {
         /* 프로필 조회 실패 — 일기 로딩은 아래에서 계속 진행 */
       }
-      // 보유 아이템 + 행성 위 설치 위치 복원 (테이블/컬럼이 없으면 null → 로컬 유지)
+      // 앱 상태 전반(아이템·행성·퀘스트·사용량·친구·알림·설정) 복원 후 write-back 시작.
+      // 실패해도(0013/0014 미적용, 오프라인) 로컬 상태로 계속 동작한다.
       if (active) {
-        const items = await fetchUserItems().catch(() => null);
-        if (active && items) useAppStore.getState().hydrateInventory(items);
+        await hydrateFromCloud().catch(() => undefined);
+        if (active) {
+          unsubCloud?.();
+          unsubCloud = watchCloudSync();
+        }
       }
 
       // 프로필 조회 성공 여부와 무관하게 "내 일기"로 교체한다.
@@ -113,6 +117,8 @@ export function AuthBootstrap() {
       else {
         unsubProgress?.();
         unsubProgress = null;
+        unsubCloud?.();
+        unsubCloud = null;
         useUserStore.getState().logout();
         // 세션이 끊긴 순간 화면에 남은 개인 데이터도 함께 정리.
         // (로그인 이력이 있을 때만 — 최초 방문의 INITIAL_SESSION(null)까지 지우지 않도록)
@@ -127,6 +133,7 @@ export function AuthBootstrap() {
       active = false;
       if (timer) window.clearTimeout(timer);
       unsubProgress?.();
+      unsubCloud?.();
       unsub();
     };
   }, []);

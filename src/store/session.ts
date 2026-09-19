@@ -6,6 +6,8 @@
 import { useDiaryStore } from "./diaryStore";
 import { useUserStore } from "./userStore";
 import { useGalaxyStore } from "./galaxyStore";
+import { useAppStore } from "./appStore";
+import { useUsageStore } from "./usageStore";
 
 /** 앱이 localStorage 에 쓰는 키는 전부 이 접두사를 쓴다. */
 const LOCAL_PREFIX = "innerverse.";
@@ -53,6 +55,8 @@ export function clearLocalUserData() {
   useDiaryStore.getState().reset();
   useUserStore.getState().reset();
   useGalaxyStore.getState().reset();
+  useAppStore.getState().reset();
+  useUsageStore.getState().reset();
 }
 
 /**

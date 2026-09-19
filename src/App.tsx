@@ -96,7 +96,7 @@ const App = () => (
             <Route path="/calendar" element={<Calendar />} />
             <Route path="/memory" element={<Memory />} />
 
-            {/* 5분기 갤러리 */}
+            {/* 5분기 갤러리  -> 7분기로 수정*/}
             <Route path="/branches" element={<BranchGallery />} />
 
             {/* 모모 7일 성장기 미리보기 */}

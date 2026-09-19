@@ -1,5 +1,5 @@
 // INNERVERSE - 글래스 모모 + 감정 진화 상수
-// 5분기 행성 정의 (HTML 레퍼런스의 BRANCH 객체 1:1 이식)
+// 5분기 행성 정의 (HTML 레퍼런스의 BRANCH 객체 1:1 이식) -> 7분기 따라야 함
 
 export type EmoKey = "pos" | "calm" | "ten" | "sad" | "emp";
 export type BranchKey = "bloom" | "calm" | "tense" | "wither" | "void";

@@ -148,7 +148,7 @@ export default function Settings() {
             // 친구 찾기는 향후 업데이트 예정
             { label: "은하수 보기", to: "/galaxy", emoji: "🌌" },
             { label: "인벤토리", to: "/inventory", emoji: "🎁" },
-            { label: "5분기 진화 갤러리", to: "/branches", emoji: "🌳" },
+            { label: "7분기 진화 갤러리", to: "/branches", emoji: "🌳" },
             { label: "3D 글래스 모드", to: "/glass", emoji: "💎" },
           ].map((it) => (
             <button

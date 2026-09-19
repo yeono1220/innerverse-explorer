@@ -127,6 +127,8 @@ interface GalaxyState {
   /** 7개 일기로 행성 1개 생성 → 그 7개를 소비 처리 */
   addPlanet: (seven: DiaryEntry[]) => EmotionPlanet;
   dismiss: (count: number) => void;
+  /** DB에서 받아온 행성/소비 일기로 복원. 로컬에만 있던 것은 살려서 합집합. */
+  hydrate: (planets: EmotionPlanet[], consumedIds: string[]) => void;
   reset: () => void;
 }
 
@@ -149,6 +151,18 @@ export const useGalaxyStore = create<GalaxyState>((set, get) => ({
     return planet;
   },
   dismiss: (count) => set({ dismissedAt: count }),
+  hydrate: (planets, consumedIds) => {
+    // 행성은 id 기준 합집합 — 오프라인에서 만든 행성이 사라지면 안 된다.
+    const merged = [...planets];
+    get().planets.forEach((local) => {
+      if (!merged.some((x) => x.id === local.id)) merged.push(local);
+    });
+    merged.sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+    // 소비된 일기 id도 합집합 — 한쪽에서만 소비됐다고 다시 세면 중복 행성이 생긴다.
+    const consumed = [...new Set([...consumedIds, ...get().consumedIds])];
+    set({ planets: merged, consumedIds: consumed });
+    save(merged, consumed);
+  },
   reset: () => {
     set({ planets: [], consumedIds: [], dismissedAt: null });
     save([], []);

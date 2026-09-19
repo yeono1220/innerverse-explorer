@@ -108,9 +108,15 @@ interface AppState {
   grantLevelReward: () => InventoryItem | null;
   /** DB(user_items)에서 받아온 보유 목록으로 덮어쓴다. 로그인 복원용. */
   hydrateInventory: (placements: ItemPlacement[]) => void;
+  /** DB(user_friends / user_notifications / user_app_state)에서 받아온 값으로 복원. */
+  hydrateApp: (p: Partial<PersistedApp>) => void;
+  /** DB의 퀘스트 완료 상태로 복원. 같은 날짜면 로컬과 OR 병합(보상 중복 지급 방지). */
+  hydrateQuests: (questsDate: string, done: Record<string, boolean>) => void;
   setCondition: (score: number, sleep: number, tags: string[]) => void;
   setSetting: <K extends keyof Settings>(k: K, v: Settings[K]) => void;
   addFriend: (code: string) => boolean;
+  /** 계정 전환/로그아웃 시 메모리에 남은 이전 사용자 상태를 기본값으로 되돌린다. */
+  reset: () => void;
 }
 
 const QUEST_KEY = "innerverse.quests";
@@ -139,6 +145,52 @@ function saveQuests(quests: Quest[], questsDate: string) {
     const done: Record<string, boolean> = {};
     quests.forEach((q) => (done[q.id] = q.done));
     window.localStorage.setItem(QUEST_KEY, JSON.stringify({ questsDate, done }));
+  } catch {
+    /* ignore */
+  }
+}
+
+const APP_KEY = "innerverse.app";
+
+/** 지금까지 메모리에만 있어 새로고침에 날아가던 상태들. */
+export interface PersistedApp {
+  friends: Friend[];
+  notifications: NotificationItem[];
+  attendance: number[];
+  condition: { score: number; sleep: number; tags: string[] };
+  settings: Settings;
+}
+
+const DEFAULT_APP: PersistedApp = {
+  friends: FRIENDS,
+  notifications: NOTIFS,
+  attendance: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], // 13일 연속
+  condition: { score: 72, sleep: 7, tags: ["피곤", "차분"] },
+  settings: { notifPush: true, notifLetter: true, notifFriend: true, weekStart: "mon", theme: "dark" },
+};
+
+function loadApp(): PersistedApp {
+  if (typeof window === "undefined") return DEFAULT_APP;
+  try {
+    const raw = window.localStorage.getItem(APP_KEY);
+    if (!raw) return DEFAULT_APP;
+    const p = JSON.parse(raw) as Partial<PersistedApp>;
+    return {
+      friends: Array.isArray(p.friends) ? p.friends : DEFAULT_APP.friends,
+      notifications: Array.isArray(p.notifications) ? p.notifications : DEFAULT_APP.notifications,
+      attendance: Array.isArray(p.attendance) ? p.attendance : DEFAULT_APP.attendance,
+      condition: { ...DEFAULT_APP.condition, ...(p.condition ?? {}) },
+      settings: { ...DEFAULT_APP.settings, ...(p.settings ?? {}) },
+    };
+  } catch {
+    return DEFAULT_APP;
+  }
+}
+
+function saveApp(s: PersistedApp) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(APP_KEY, JSON.stringify(s));
   } catch {
     /* ignore */
   }
@@ -183,6 +235,19 @@ function saveInventory(placements: ItemPlacement[]) {
 
 const INIT_QUESTS = loadQuests(QUESTS);
 const INIT_INVENTORY = loadInventory(INVENTORY);
+const INIT_APP = loadApp();
+
+/** 현재 스토어에서 영속 대상만 뽑아 저장. 변경 액션이 공통으로 호출한다. */
+function persistApp(get: () => AppState) {
+  const s = get();
+  saveApp({
+    friends: s.friends,
+    notifications: s.notifications,
+    attendance: s.attendance,
+    condition: s.condition,
+    settings: s.settings,
+  });
+}
 
 /**
  * 아이템 1종을 보유 상태로 만들고 행성 표면 위 자리를 정한다.
@@ -206,16 +271,19 @@ function acquire(
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
-  friends: FRIENDS,
-  notifications: NOTIFS,
+  friends: INIT_APP.friends,
+  notifications: INIT_APP.notifications,
   quests: INIT_QUESTS.quests,
   questsDate: INIT_QUESTS.questsDate,
   inventory: INIT_INVENTORY.inventory,
   placements: INIT_INVENTORY.placements,
-  attendance: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], // 13일 연속
-  condition: { score: 72, sleep: 7, tags: ["피곤", "차분"] },
-  settings: { notifPush: true, notifLetter: true, notifFriend: true, weekStart: "mon", theme: "dark" },
-  markNotifsRead: () => set({ notifications: get().notifications.map((n) => ({ ...n, unread: false })) }),
+  attendance: INIT_APP.attendance,
+  condition: INIT_APP.condition,
+  settings: INIT_APP.settings,
+  markNotifsRead: () => {
+    set({ notifications: get().notifications.map((n) => ({ ...n, unread: false })) });
+    persistApp(get);
+  },
   toggleQuest: (id) => {
     get().ensureQuestsForToday(); // 날짜가 바뀌었으면 먼저 리셋
     const quests = get().quests.map((q) => (q.id === id ? { ...q, done: !q.done } : q));
@@ -273,11 +341,37 @@ export const useAppStore = create<AppState>((set, get) => ({
       .filter((p) => !placements.some((d) => d.itemId === p.itemId))
       .forEach((p) => void saveUserItem(p).catch(() => undefined));
   },
+  // DB 값으로 복원. 넘어온 필드만 덮어쓰고 곧바로 로컬에도 반영한다.
+  hydrateApp: (p) => {
+    set({
+      ...(p.friends ? { friends: p.friends } : {}),
+      ...(p.notifications ? { notifications: p.notifications } : {}),
+      ...(p.attendance ? { attendance: p.attendance } : {}),
+      ...(p.condition ? { condition: p.condition } : {}),
+      ...(p.settings ? { settings: p.settings } : {}),
+    });
+    persistApp(get);
+  },
+  // 같은 날짜면 로컬 완료분을 지우지 않는다(이미 받은 보상을 다시 받게 되면 안 됨).
+  hydrateQuests: (questsDate, done) => {
+    const sameDay = questsDate === get().questsDate;
+    const quests = get().quests.map((q) => ({
+      ...q,
+      done: sameDay ? q.done || !!done[q.id] : !!done[q.id],
+    }));
+    set({ quests, questsDate });
+    saveQuests(quests, questsDate);
+    get().ensureQuestsForToday(); // 날짜가 지난 상태로 들어왔으면 즉시 리셋
+  },
   setCondition: (score, sleep, tags) => {
     set({ condition: { score, sleep, tags } });
+    persistApp(get);
     get().completeQuest("q4"); // 컨디션 체크 -> 퀘스트 자동 달성
   },
-  setSetting: (k, v) => set({ settings: { ...get().settings, [k]: v } }),
+  setSetting: (k, v) => {
+    set({ settings: { ...get().settings, [k]: v } });
+    persistApp(get);
+  },
   addFriend: (code) => {
     const normalizedCode = code.trim().toUpperCase();
     if (!normalizedCode) return false;
@@ -292,6 +386,23 @@ export const useAppStore = create<AppState>((set, get) => ({
       lastEmotion: "차분",
     };
     set({ friends: [...get().friends, f] });
+    persistApp(get);
     return true;
+  },
+  // localStorage 만 지우면 화면이 들고 있는 이전 사용자 상태가 그대로 남아
+  // 다음 계정의 DB로 합쳐져 버린다. 메모리도 함께 비운다.
+  reset: () => {
+    const today = todayStr();
+    const quests = QUESTS.map((q) => ({ ...q, done: false }));
+    set({
+      ...DEFAULT_APP,
+      quests,
+      questsDate: today,
+      inventory: INVENTORY.map((i) => ({ ...i, owned: false })),
+      placements: [],
+    });
+    saveApp(DEFAULT_APP);
+    saveQuests(quests, today);
+    saveInventory([]);
   },
 }));
