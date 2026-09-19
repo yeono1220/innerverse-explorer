@@ -190,14 +190,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setSetting: (k, v) => set({ settings: { ...get().settings, [k]: v } }),
   addFriend: (code) => {
-    if (!code.trim()) return false;
-    const name = code.split(/[-_]/)[0]?.slice(0, 6) || "친구";
+    const normalizedCode = code.trim().toUpperCase();
+    if (!normalizedCode) return false;
+    if (get().friends.some((friend) => friend.code.trim().toUpperCase() === normalizedCode)) return false;
+    const name = normalizedCode.split(/[-_]/)[0]?.slice(0, 6) || "친구";
     const f: Friend = {
       id: `f${Date.now()}`,
       name,
       planetColor: "purple",
       similarity: Math.floor(40 + Math.random() * 50),
-      code,
+      code: normalizedCode,
       lastEmotion: "차분",
     };
     set({ friends: [...get().friends, f] });
