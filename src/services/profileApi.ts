@@ -38,10 +38,18 @@ export async function saveProgress(p: ProgressPatch): Promise<void> {
   const sb = getSupabase();
   const { data: u } = await sb.auth.getUser();
   if (!u.user) return;
-  const { error } = await sb
-    .from("profiles")
-    .upsert({ id: u.user.id, email: u.user.email, ...p }, { onConflict: "id" });
+  // upsert 가 아니라 update. profiles 행은 가입 트리거(0003/0013)와 시드 RPC 가 항상
+  // 만들어 두고, upsert 는 INSERT 검사가 먼저 돌아 nickname NOT NULL 에 걸려
+  // (익명 유저는 email 도 없음) 매번 조용히 실패했다 — 출석·레벨이 DB 에 안 남던 원인.
+  const { data, error } = await sb.from("profiles").update(p).eq("id", u.user.id).select("id");
   if (error) throw error;
+  if (!data?.length) {
+    // 행이 정말 없을 때만 생성 (nickname 필수)
+    const { error: e2 } = await sb
+      .from("profiles")
+      .insert({ id: u.user.id, email: u.user.email, nickname: "이음", planet_name: "이음의 행성", ...p });
+    if (e2) throw e2;
+  }
 }
 
 export async function getProfile(): Promise<ProfileRow | null> {
