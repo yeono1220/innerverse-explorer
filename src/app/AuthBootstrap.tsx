@@ -47,7 +47,14 @@ export function AuthBootstrap() {
       });
     };
 
+    // 이 세션에서 이미 하이드레이트한 사용자. Supabase 는 탭 포커스/토큰 갱신 때마다
+    // SIGNED_IN 을 다시 쏘는데, 그때마다 DB 값으로 스토어를 덮어쓰면 아직 DB 에
+    // 안 밀린 변경(출석·레벨 등, 디바운스 대기 중)이 되돌아간다. 같은 uid 면 건너뛴다.
+    let hydratedUid: string | null = null;
+
     const hydrate = async (user: User) => {
+      if (hydratedUid === user.id) return;
+      hydratedUid = user.id;
       // 계정이 바뀌었으면 이전 사용자의 로컬 흔적(일기·레벨·행성·퀘스트)부터 지운다.
       if (getLastUid() !== user.id) clearLocalUserData();
       setLastUid(user.id);
@@ -118,6 +125,7 @@ export function AuthBootstrap() {
     const unsub = onAuthChange((user) => {
       if (user) hydrate(user);
       else {
+        hydratedUid = null;
         unsubProgress?.();
         unsubProgress = null;
         unsubCloud?.();

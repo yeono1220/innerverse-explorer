@@ -164,7 +164,7 @@ export interface PersistedApp {
 const DEFAULT_APP: PersistedApp = {
   friends: FRIENDS,
   notifications: NOTIFS,
-  attendance: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], // 13일 연속
+  attendance: [], // 출석 도장은 실제 출석으로만 채운다 (화면은 streak 기준으로 그림)
   condition: { score: 72, sleep: 7, tags: ["피곤", "차분"] },
   settings: { notifPush: true, notifLetter: true, notifFriend: true, weekStart: "mon", theme: "dark" },
 };
