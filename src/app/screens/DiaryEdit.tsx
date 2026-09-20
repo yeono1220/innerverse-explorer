@@ -38,6 +38,7 @@ export default function DiaryEdit() {
       emotions: analyzed.emotions,
       keywords: analyzed.keywords,
       primary: analyzed.primary,
+      insight: analyzed.insight ?? null,
     };
     update(id, patch);
 

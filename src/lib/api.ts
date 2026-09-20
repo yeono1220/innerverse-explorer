@@ -7,10 +7,18 @@ import { getSession } from "@/services/auth";
 const API_BASE =
   (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_URL ?? "";
 
+/** 모델이 쓴 해석 — 결과 화면 '모모의 해석'. 휴리스틱 폴백이면 없음. */
+export interface DiaryInsight {
+  reason: string;
+  reframe: string;
+  next_step: string;
+}
+
 export interface DiaryAnalysis {
   emotions: Array<{ label: EmotionLabel; pct: number }>;
   keywords: string[];
   primary: EmotionLabel;
+  insight?: DiaryInsight;
   crisis_score: number;
   emo7: Record<Emo7, number>; // 행성 반영용 7감정 (diary.emotions 에서 파생)
   dominant: string;
@@ -21,6 +29,7 @@ interface AnalyzeApiResponse {
   keywords?: string[];
   crisis_score?: number;
   dominant?: string;
+  insight?: { reason?: string; reframe?: string; next_step?: string } | null;
 }
 
 /** 일기 텍스트(+선택 음성)를 백엔드로 보내 7라벨 감정 분석을 받는다. */
@@ -56,6 +65,15 @@ export async function analyzeDiary(text: string, audio?: Blob): Promise<DiaryAna
     crisis_score: data.crisis_score ?? 0,
     emo7,
     dominant: data.dominant ?? "calm",
+    ...(data.insight && (data.insight.reason || data.insight.reframe || data.insight.next_step)
+      ? {
+          insight: {
+            reason: data.insight.reason ?? "",
+            reframe: data.insight.reframe ?? "",
+            next_step: data.insight.next_step ?? "",
+          },
+        }
+      : {}),
   };
 }
 

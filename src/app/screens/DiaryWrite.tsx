@@ -127,6 +127,7 @@ export default function DiaryWrite() {
       emotions: analyzed.emotions,
       keywords: analyzed.keywords,
       primary: analyzed.primary,
+      insight: analyzed.insight ?? null,
     });
 
     // 로그인 상태면 DB에도 저장 (비로그인/실패는 조용히 무시)
@@ -143,6 +144,7 @@ export default function DiaryWrite() {
           emotions: entry.emotions,
           keywords: entry.keywords,
           primary: entry.primary,
+          insight: entry.insight ?? null,
         });
         // 장기기억 갱신 (③④ 사실·성향 추출) — 비동기, 실패 무시
         const { reflect } = await import("@/services/memory");

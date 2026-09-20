@@ -1,12 +1,14 @@
 // 일기 본문 → 감정 비중 · 키워드 추출.
 // 작성(DiaryWrite)과 수정(DiaryEdit)이 같은 파이프라인을 쓰도록 한 곳에 모았다.
-import { analyzeDiary } from "@/lib/api";
+import { analyzeDiary, type DiaryInsight } from "@/lib/api";
 import type { EmotionLabel } from "@/store/diaryStore";
 
 export interface Analysis {
   emotions: Array<{ label: EmotionLabel; pct: number }>;
   keywords: string[];
   primary: EmotionLabel;
+  /** 백엔드(Claude) 분석일 때만. 규칙 기반 폴백엔 없다. */
+  insight?: DiaryInsight;
 }
 
 const RULES: Array<[EmotionLabel, RegExp]> = [

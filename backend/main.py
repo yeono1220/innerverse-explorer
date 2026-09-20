@@ -119,6 +119,13 @@ class DiaryResult(BaseModel):
     primary: str
 
 
+class DiaryInsight(BaseModel):
+    """모델이 쓴 해석. 결과 화면 '모모의 해석' 카드. 휴리스틱 폴백은 None."""
+    reason: str = ""
+    reframe: str = ""
+    next_step: str = ""
+
+
 class AnalyzeResponse(BaseModel):
     status: str = "success"
     extracted_text: str
@@ -126,6 +133,7 @@ class AnalyzeResponse(BaseModel):
     keywords: list[str]
     crisis_score: float = Field(0.0, ge=0.0, le=1.0)
     diary: DiaryResult  # 앱 일기 화면용 7감정 결과 (단일 소스)
+    insight: Optional[DiaryInsight] = None
 
 class MomoReplyRequest(BaseModel):
     text: str
@@ -314,12 +322,15 @@ def _analyze_from_data(data: dict, text: str) -> AnalyzeResponse:
     diary = normalize_diary(data, text)
     keywords = [str(k) for k in (data.get("keywords") or [])][:3] or ["기록"]
     crisis = float(data.get("crisis_score", 0.0) or 0.0)
+    ins = {k: str(data.get(k) or "").strip() for k in ("reason", "reframe", "next_step")}
+    insight = DiaryInsight(**ins) if any(ins.values()) else None
     return AnalyzeResponse(
         extracted_text=text,
         dominant=dominant_of(diary.primary),
         keywords=keywords,
         crisis_score=max(0.0, min(1.0, crisis)),
         diary=diary,
+        insight=insight,
     )
 
 # ─────────────────────────────────────────────────────────────────────────────
