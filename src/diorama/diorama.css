@@ -174,3 +174,24 @@
   color: #b9b3cd;
   line-height: 1.4;
 }
+
+/* ── /glass 상단 바 배치 ─────────────────────────────────────
+   뒤로 버튼은 왼쪽, 문구는 폰 화면의 정중앙.
+
+   flex + space-between 으로는 문구가 '남은 공간의 가운데'에 놓여
+   버튼 반대쪽으로 밀린다. 버튼과 같은 폭(38px)의 빈 칸을 반대편에 둬서
+   문구가 실제 화면 중앙에 오도록 3칸 그리드로 잡는다.
+   .iv-topbar 자체는 glass-momo / pitch 화면도 쓰므로 건드리지 않는다. */
+.iv-topbar.iv-topbar--centered {
+  display: grid;
+  grid-template-columns: 38px 1fr 38px; /* .iv-iconbtn 과 같은 폭 */
+  align-items: start;
+  gap: 8px;
+}
+.iv-topbar--centered .iv-iconbtn {
+  justify-self: start;
+}
+.iv-topbar--centered .iv-topbar-title {
+  text-align: center;
+  min-width: 0; /* 행성 이름이 길어도 가운데 칸이 버튼을 밀어내지 않게 */
+}
