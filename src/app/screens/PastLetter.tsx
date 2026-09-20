@@ -396,7 +396,7 @@ export default function PastLetter() {
                     inputMode="numeric"
                     value={customStr}
                     onChange={(e) => onCustom(e.target.value)}
-                    placeholder="n"
+                    placeholder=""
                     aria-label={`직접 ${unitLabel(unit)} 수 입력`}
                     style={{
                       width: 34,
