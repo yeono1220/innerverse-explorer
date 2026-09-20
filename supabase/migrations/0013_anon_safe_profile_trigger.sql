@@ -12,7 +12,7 @@
 --   (이메일 가입은 email 이 있어 정상 → 익명만 실패하는 증상과 일치)
 --
 -- 수정
---   · nickname 이 비면 '이음' 으로, planet_name 도 그에 맞춰 채운다.
+--   · nickname 이 비면 'user' 으로, planet_name 도 그에 맞춰 채운다.
 --   · 트리거 안의 어떤 예외도 가입을 막지 못하게 exception 블록으로 감싼다.
 --     (프로필이 없어도 앱은 seed_demo_universe()/saveProgress 의 upsert 로 복구한다)
 --
@@ -24,7 +24,7 @@ declare
   nick text := coalesce(
     nullif(new.raw_user_meta_data->>'nickname', ''),
     nullif(split_part(coalesce(new.email, ''), '@', 1), ''),
-    '이음'
+    'user'
   );
 begin
   begin

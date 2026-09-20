@@ -390,6 +390,32 @@ class ClaudeAnalyzer(_LLMAnalyzer):
         )
         return "".join(getattr(b, "text", "") for b in msg.content if getattr(b, "type", "") == "text")
 
+    def analyze_image(self, mime: str, b64: str) -> dict:
+        """사진 → 일기 맥락 (labels/scene/emotion_hint). Claude 는 이미지를 base64 블록으로 받는다."""
+        client = self._get_client()
+        allowed = ("image/jpeg", "image/png", "image/gif", "image/webp")
+        media = mime if mime in allowed else "image/jpeg"
+        msg = client.messages.create(
+            model=self._model,
+            max_tokens=512,
+            system="너는 일기 앱의 사진 해석기다. 반드시 순수 JSON만 출력. 코드펜스·설명 금지.",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": media, "data": b64}},
+                    {"type": "text", "text": (
+                        "이 사진을 보고 일기 맥락용으로 JSON만 출력해라. "
+                        '{"labels":[핵심 사물/장면 3~5개 한국어], '
+                        '"scene":"한 줄 분위기 묘사(한국어, 따뜻하게)", '
+                        '"emotion_hint":"기쁨|차분|사랑|슬픔|분노|긴장|공허 중 하나 또는 null"}'
+                    )},
+                ],
+            }],
+            extra_body={"output_config": {"effort": settings.CLAUDE_EFFORT}},
+        )
+        content = "".join(getattr(b, "text", "") for b in msg.content if getattr(b, "type", "") == "text")
+        return _parse_json_object(content)
+
 
 # ── 팩토리 ────────────────────────────────────────────────────
 _REGISTRY: dict[str, type[Analyzer]] = {

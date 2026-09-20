@@ -47,7 +47,7 @@ export async function saveProgress(p: ProgressPatch): Promise<void> {
     // 행이 정말 없을 때만 생성 (nickname 필수)
     const { error: e2 } = await sb
       .from("profiles")
-      .insert({ id: u.user.id, email: u.user.email, nickname: "이음", planet_name: "이음의 행성", ...p });
+      .insert({ id: u.user.id, email: u.user.email, nickname: "user", planet_name: "user의 행성", ...p });
     if (e2) throw e2;
   }
 }

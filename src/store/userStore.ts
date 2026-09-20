@@ -99,20 +99,20 @@ interface Persisted {
   lastCheckIn: string | null;
 }
 
-export function generatePlanetCode(prefix = "IEUM") {
-  const safePrefix = String(prefix ?? "IEUM")
+export function generatePlanetCode(prefix = "USER") {
+  const safePrefix = String(prefix ?? "USER")
     .trim()
     .replace(/[^A-Za-z0-9가-힣]/g, "")
     .slice(0, 12);
 
   const digits = String(Math.floor(Math.random() * 10000)).padStart(4, "0");
-  const normalized = safePrefix || "IEUM";
+  const normalized = safePrefix || "USER";
   return `${normalized.toUpperCase()}-${digits}`;
 }
 
 export const DEFAULT_USER: Persisted = {
   loggedIn: false,
-  name: "IEUM",
+  name: "user",
   email: "",
   level: START_LEVEL,
   levelExp: 0,
@@ -123,8 +123,8 @@ export const DEFAULT_USER: Persisted = {
   discountWon: 0,
   plan: "free",
   planetColor: "green",
-  planetName: "이음의 행성",
-  planetCode: generatePlanetCode("IEUM"),
+  planetName: "user의 행성",
+  planetCode: generatePlanetCode("USER"),
   lastCheckIn: null,
 };
 
