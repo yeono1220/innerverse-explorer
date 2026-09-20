@@ -102,6 +102,10 @@ class Analyzer(abc.ABC):
         """system+user → 텍스트 응답(모모 답장 등). 실패 시 예외."""
         raise NotImplementedError
 
+    def generate_stream(self, system: str, user: str):
+        out = self.generate(system, user)
+        if out: yield out
+
 
 # ── 호스팅 LLM 공통(gemini/claude) ────────────────────────────
 #   analyze()=JSON 강제 / generate()=자유 텍스트 로직을 여기 한 곳에만 둔다.
@@ -415,6 +419,19 @@ class ClaudeAnalyzer(_LLMAnalyzer):
         )
         content = "".join(getattr(b, "text", "") for b in msg.content if getattr(b, "type", "") == "text")
         return _parse_json_object(content)
+
+    def generate_stream(self, system:str, user:str):
+        """토큰을 조각(chunk)으로 하나씩 yield"""
+        client = self._get_client()
+        with client.messages.stream(
+            model=self._model,
+            max_tokens=512,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+            # extra_body={"output_config": {"effort": settings.CLAUDE_EFFORT}},
+        ) as stream:
+            for text in stream.text_stream:
+                yield text        
 
 
 # ── 팩토리 ────────────────────────────────────────────────────

@@ -426,6 +426,21 @@ def _gen_text(system: str, user: str) -> Optional[str]:
         raise HTTPException(status_code=502, detail=str(e))
 
 
+def _compose_momo_prompt(
+    *,
+    history: list[str],
+    turn: str,
+    instruction: str = "",
+) -> tuple[str, str]:
+    system = PROMPT_MOMO_SYSTEM
+    if instruction:
+        system = f"{system}\n\n{instruction}"
+    user_parts = [part.strip() for part in history if part and part.strip()]
+    if turn.strip():
+        user_parts.append(turn.strip())
+    return system, "\n\n".join(user_parts)
+
+
 def _gen_text_momo(system: str, user: str, *, call_type: str,
                    session_id: Optional[str] = None) -> Optional[str]:
     """모모챗 전용 generate — vLLM 이면 스트리밍 계측(9지표 로깅) 경로, 그 외엔 일반 generate.
@@ -443,6 +458,14 @@ def _gen_text_momo(system: str, user: str, *, call_type: str,
     except Exception as e:
         print(f"[main] generate 실패({analyzer.name}): {e}")
         return None
+    
+def _gen_stream_momo(system: str, user: str, *, call_type: str, session_id: Optional[str] = None):
+    """모모챗 스트리밍 - 조각을 yield하고 실패하면 폴백"""
+    analyzer: Analyzer = get_analyzer()
+    try: yield from analyzer.generate_stream(system, user)
+    except Exception as e:
+        print(f"[main] generate_stream 실패({analyzer.name}): {e}")
+        raise
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -632,12 +655,18 @@ async def momo_reply(
     if req.history:
         parts.append("직전 대화:\n" + "\n".join(req.history[-6:]))
     parts.append(f"사용자: {req.text}")
-    if escalate and req.isLinkAgreed:
-        parts.append("(위기 신호 감지됨 — 위로 후 전문가 연계를 부드럽게 권할 것)")
 
-    # reply = await asyncio.to_thread(_gen_text, PROMPT_MOMO_SYSTEM, "\n\n".join(parts))
+    system_prompt, user_prompt = _compose_momo_prompt(
+        history=parts[:-1],
+        turn=parts[-1],
+        instruction=(
+            "위기 신호가 강하고 사용자가 전문가 연계에 동의한 경우에는 "
+            "위로 후 전문가 연계를 부드럽게 권하라."
+            if escalate and req.isLinkAgreed else ""
+        ),
+    )
     reply = await asyncio.to_thread(
-        _gen_text_momo, PROMPT_MOMO_SYSTEM, "\n\n".join(parts),
+        _gen_text_momo, system_prompt, user_prompt,
         call_type="momo_reply", session_id=req.session_id,
     )
     if not reply:
@@ -649,6 +678,78 @@ async def momo_reply(
             reply = "그 마음 충분히 그럴 수 있어. 오늘은 작은 한 걸음만 같이 떠올려보자."
     return MomoReplyResponse(reply=reply.strip(), escalate=escalate)
 
+@app.post("/api/momo/reply/stream")
+async def momo_reply_stream(
+    req: MomoReplyRequest,
+    user: CurrentUser = Depends(user_rate_limit("momo", auth_settings.RL_LLM_PER_MIN)),
+):
+    import json, time
+    from fastapi.responses import StreamingResponse
+
+    crisis = heuristic_crisis(req.text)
+    escalate = crisis >= 0.6
+
+    parts: list[str] = []
+    if req.profile:
+        parts.append(f"내가 아는 너(장기기억): {req.profile}")
+    if req.context:
+        parts.append("과거 기록(참고):\n" + "\n".join(f"- {c}" for c in req.context[:3]))
+    if req.emotions:
+        e = req.emotions
+        parts.append(
+            f"현재 감정비중 기쁨{e.joy}/차분{e.calm}/사랑{e.love}/슬픔{e.sad}/"
+            f"분노{e.anger}/긴장{e.tension}/공허{e.empty}"
+        )
+    if req.history:
+        parts.append("직전 대화:\n" + "\n".join(req.history[-6:]))
+    parts.append(f"사용자: {req.text}")
+    system_prompt, user_prompt = _compose_momo_prompt(
+        history=parts[:-1],
+        turn=parts[-1],
+        instruction=(
+            "위기 신호가 강하고 사용자가 전문가 연계에 동의한 경우에는 "
+            "위로 후 전문가 연계를 부드럽게 권하라."
+            if escalate and req.isLinkAgreed else ""
+        ),
+    )
+
+    def event_source():
+        t0 = time.perf_counter()
+        ttft = None
+        # escalate 는 LLM 없이 이미 계산돼 있으니 먼저 보낸다
+        # ensure_ascii=False로 전송량 최소화
+        yield f"data: {json.dumps({'type': 'meta', 'escalate': escalate}, ensure_ascii=False)}\n\n"
+        try : 
+            for chunk in _gen_stream_momo(system_prompt, user_prompt, call_type="momo_reply_stream", session_id=req.session_id):
+                if ttft is None:
+                    ttft = time.perf_counter() - t0
+                    print(f"[momo-metrics] TTFT={ttft*1000:.0f}ms session={req.session_id}")
+                yield f"data: {json.dumps({'type': 'delta', 'text': chunk}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except Exception:
+            # ⚠️ 이미 200 헤더가 나갔으므로 HTTPException 을 던져도 소용없다.
+            yield f"data: {json.dumps({'type': 'error'})}\n\n"
+        ''' SSE 프로토콜 폐기   
+        # 현재 Analyzer 계약은 완성 텍스트 생성이다. 완성 응답도 SSE 계약으로 전달한다.
+        reply = _gen_text_momo(
+            system_prompt,
+            user_prompt,
+            call_type="momo_reply_stream",
+            session_id=req.session_id,
+        ) or "그 마음 충분히 그럴 수 있어. 오늘은 작은 한 걸음만 같이 떠올려보자."
+        yield f"data: {json.dumps({'type': 'delta', 'text': reply})}\n\n"
+        # 끝났다는 신호
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        '''
+
+    return StreamingResponse(
+        event_source(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",   # ← 4단계 함정 참고. 반드시 넣을 것
+        },
+    )
 
 PROMPT_MOMO_DIARY = (
     "너는 사용자의 하루 대화를 바탕으로 '1인칭 일기'를 써주는 도우미다.\n"
@@ -668,9 +769,13 @@ async def momo_diary(
     lines = [f"{who(m)}: {txt(m)}" for m in req.messages if txt(m)]
     if not lines:
         return MomoDiaryResponse(diary="")
-    # body = await asyncio.to_thread(_gen_text, PROMPT_MOMO_DIARY, "\n".join(lines))
+    system_prompt, user_prompt = _compose_momo_prompt(
+        history=lines[:-1],
+        turn=lines[-1],
+        instruction=PROMPT_MOMO_DIARY,
+    )
     body = await asyncio.to_thread(
-        _gen_text_momo, PROMPT_MOMO_DIARY, "\n".join(lines),
+        _gen_text_momo, system_prompt, user_prompt,
         call_type="momo_diary", session_id=req.session_id,
     )
     if not body:  # LLM 실패 → 사용자 발화 이어붙이기 (프론트 폴백과 동일)

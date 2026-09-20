@@ -5,7 +5,7 @@ import { StatusBar, AppBar, Body, IconButton } from "../ui/layout";
 import { Momo2D } from "../ui/planet";
 import { EmotionDot } from "../ui/emotion";
 import type { EmotionLabel } from "@/store/diaryStore";
-import { momoReply } from "@/lib/api";
+import { momoReplyStream } from "@/lib/api";
 import { ragContext } from "@/services/rag";
 import { getMemory, memoryPromptBlock } from "@/services/memory";
 import { CareSheet } from "../ui/CareSheet";
@@ -60,6 +60,7 @@ export default function MomoChat() {
   ]);
   const [input, setInput] = useState("");
   const [careOpen, setCareOpen] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // 모모챗 세션 id — vLLM 성능 9지표 로깅을 이 대화에 귀속시키기 위함(마운트당 1개)
@@ -75,6 +76,11 @@ export default function MomoChat() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs.length]);
+
+  const scrollChatToBottom = () => {
+    const container = chatScrollRef.current;
+    if (container) container.scrollTop = container.scrollHeight;
+  };
 
   const send = async (text: string) => {
   const t = text.trim();
@@ -112,15 +118,21 @@ export default function MomoChat() {
     // 서로 독립인 두 조회를 병렬로 (직렬 → 병렬)
     const [hits, mem] = await Promise.all([ragContext(t), getMemory()]);
     memory = hits.map((h) => h.preview);
-    const r = await momoReply({
+    const r = await momoReplyStream({
       text: t,
       context: hits.map((h) => h.snippet),
       history,
       profile: memoryPromptBlock(mem),
       session_id: sessionId,
-    });
-    if (r?.reply) reply = r.reply;
-    if (r?.escalate) window.setTimeout(() => setCareOpen(true), 700);
+    },
+    (partial) => {
+      setMsgs((m) => m.map((msg) => (msg.id === thinkingId ? { ...msg, text: partial } : msg)));
+        requestAnimationFrame(scrollChatToBottom);
+    },
+  );
+  reply = r.reply;
+    // if (r?.reply) reply = r.reply;
+  if (r?.escalate) window.setTimeout(() => setCareOpen(true), 700);
   } catch {
     /* 백엔드 실패 → 로컬 규칙 답장 유지 */
   }
@@ -141,7 +153,7 @@ export default function MomoChat() {
         }
       />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ flex: 1, overflowY: "auto", padding: "12px 18px 8px", display: "flex", flexDirection: "column", gap: 10 }}>
+        <div ref={chatScrollRef} style={{ flex: 1, overflowY: "auto", padding: "12px 18px 8px", display: "flex", flexDirection: "column", gap: 10 }}>
           {msgs.map((m) => (
             <div key={m.id} style={{ display: "flex", justifyContent: m.who === "me" ? "flex-end" : "flex-start" }}>
               {m.who === "momo" && (

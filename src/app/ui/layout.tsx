@@ -5,12 +5,12 @@ import { useNavigate, useLocation } from "react-router-dom";
 // 폰 위(스테이지)에 띄우는 리드 문구. 경로별로 정의 — 정의된 화면에서만 노출된다.
 const PAGE_LEAD: Record<string, { k: string; h1: string; p: string }> = {
   "/home": {
-    k: "home",
+    k: "HOME",
     h1: "2026 AI CHAMPIONSHIP",
     p: "일주일의 목업 데이터가 기본으로 제공되어있습니다",
   },
   "/diary": {
-    k: "diary record",
+    k: "DIARY",
     h1: "이미 기록해둔 감정,\n언제든 다시 꺼내볼 수 있어요",
     p: "지난날의 마음을 천천히, 편하게 다시 들여다봐요.",
   },

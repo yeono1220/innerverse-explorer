@@ -103,6 +103,52 @@ export async function momoReply(input: {
   return (await res.json()) as { reply: string; escalate: boolean };
 }
 
+/** 모모 공감 답장(스트리밍). onDelta 가 조각이 올 때마다 호출된다. */
+function stripMomoSpeakerPrefix(text: string): string {
+  return text.replace(/^\s*(?:모모|momo)\s*:\s*/i, "");
+}
+
+export async function momoReplyStream(
+  input: {
+    text: string; emotions?: Record<string, number>; context?: string[];
+    history?: string[]; profile?: string; session_id?: string;
+  },
+  onDelta: (textSoFar: string) => void,
+): Promise<{ reply: string; escalate: boolean }> {
+  const res = await fetch(`${API_BASE}/api/momo/reply/stream`, {
+    method: "POST",
+    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok || !res.body) throw new Error(`momo ${res.status}`);
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let reply = "";
+  let escalate = false;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true }); // 한글 깨짐 방지
+
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";          // 잘린 마지막 조각은 다음 루프로 넘김
+    for (const part of parts) {
+      if (!part.startsWith("data: ")) continue;
+      const ev = JSON.parse(part.slice(6));
+      if (ev.type === "meta") escalate = ev.escalate;
+      if (ev.type === "delta") {
+        reply += ev.text;
+        onDelta(stripMomoSpeakerPrefix(reply));
+      }
+      if (ev.type === "error") throw new Error("momo stream error");
+    }
+  }
+  return { reply: stripMomoSpeakerPrefix(reply), escalate };
+}
+
 /** 이번 주 일기 → AI 회고 요약 + 추천. */
 export async function weeklyReview(
   diaries: string[],
