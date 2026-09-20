@@ -79,10 +79,10 @@ export default function PastLetter() {
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
 
-  const today = useMemo(() => ymd(new Date()), []);
+  const [today, setToday] = useState(() => ymd(new Date()));
   const revealAt = useMemo(
     () => ymd(unit === "day" ? addDays(new Date(), amount) : addMonths(new Date(), amount)),
-    [unit, amount],
+    [today, unit, amount],
   );
 
   // 항상 맨 앞에 두는 더미 과거 편지 (1주 전 작성)
@@ -109,19 +109,57 @@ export default function PastLetter() {
     }
   };
 
-  // 마운트 시 "내" 편지만 불러온다 (DB 경로: RLS + user_id 필터로 타인 편지는 안 옴)
+  // 마운트 시 "내" 편지만 불러온다 ( DB 경로는 RLS + user_id 필터로 타인 편지를 차단)
+  // 날짜가 바뀌거나 다른 탭/백그라운드에서 돌아오면 공개일 기준을 갱신한다.
+  // 그래야 화면을 열어둔 채 D-day가 0이 되는 순간에도 봉인 목록을 다시 분류한다.
+  useEffect(() => {
+    const refreshToday = () => {
+      const next = ymd(new Date());
+      setToday((current) => (current === next ? current : next));
+    };
+    const timer = window.setInterval(refreshToday, 60_000);
+    window.addEventListener("focus", refreshToday);
+    document.addEventListener("visibilitychange", refreshToday);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshToday);
+      document.removeEventListener("visibilitychange", refreshToday);
+    };
+  }, []);
+
+  // 마운트 및 today 변경 시 "내" 편지를 다시 불러온다.
+  // DB 경로는 RLS + user_id 필터로 타인 편지를 차단한다.
+  
+  // useEffect(() => {
+  //   let alive = true;
+  //   (async () => {
+  //     try {
+  //       const mine = await listMyLetters(today);
+  //       if (alive) setLetters(mine);
+  //     } catch {
+  //       if (alive) setLoadError(true);
+  //     } finally {
+  //       if (alive) setLoading(false);
+  //     }
+  //   })();
+  //   return () => {
+  //     alive = false;
+  //   };
+  // }, [today]);
   useEffect(() => {
     let alive = true;
-    (async () => {
-      try {
-        const mine = await listMyLetters(today);
+    setLoading(true);
+    setLoadError(false);
+    listMyLetters(today)
+      .then((mine) => {
         if (alive) setLetters(mine);
-      } catch {
+      })
+      .catch(() => {
         if (alive) setLoadError(true);
-      } finally {
+      })
+      .finally(() => {
         if (alive) setLoading(false);
-      }
-    })();
+      });
     return () => {
       alive = false;
     };

@@ -5,7 +5,7 @@ import { StatusBar, AppBar, Body, IconButton } from "../ui/layout";
 import { Momo2D } from "../ui/planet";
 import { EmotionDot } from "../ui/emotion";
 import type { EmotionLabel } from "@/store/diaryStore";
-import { momoReplyStream, InputRejectedError } from "@/lib/api";
+import { momoReplyStream, InputRejectedError, ServiceBusyError } from "@/lib/api";
 import { ragContext } from "@/services/rag";
 import { getMemory, memoryPromptBlock } from "@/services/memory";
 import { CareSheet } from "../ui/CareSheet";
@@ -60,8 +60,11 @@ export default function MomoChat() {
   ]);
   const [input, setInput] = useState("");
   const [careOpen, setCareOpen] = useState(false);
-  // 서버가 입력을 거절했을 때의 안내문구 (길이 초과 등). null 이면 안 보인다.
-  const [notice, setNotice] = useState<string | null>(null);
+  // 입력창 위 안내. null 이면 안 보인다.
+  //   warn = 입력을 고쳐야 하는 경우(길이 초과)
+  //   calm = 고칠 게 없고 그냥 기다리면 되는 경우(예약·혼잡) — 장애처럼 보이면 안 된다
+  const [notice, setNotice] =
+    useState<{ text: string; tone: "warn" | "calm" } | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -129,9 +132,13 @@ export default function MomoChat() {
       session_id: sessionId,
     },
     (partial) => {
+      // 첫 조각이 오면 내 차례가 된 것 — 예약 안내는 역할을 다했으니 치운다.
+      setNotice((n) => (n?.tone === "calm" ? null : n));
       setMsgs((m) => m.map((msg) => (msg.id === thinkingId ? { ...msg, text: partial } : msg)));
         requestAnimationFrame(scrollChatToBottom);
     },
+    // 앞에 대기자가 있을 때만 한 번 불린다. 재전송은 없다 — 연결은 계속 열려 있다.
+    ({ message }) => setNotice({ text: message, tone: "calm" }),
   );
   reply = r.reply;
     // if (r?.reply) reply = r.reply;
@@ -141,8 +148,15 @@ export default function MomoChat() {
     // → 안내문구를 띄우고, 방금 쓴 글은 입력창에 돌려준다.
     if (e instanceof InputRejectedError) {
       setMsgs((m) => m.filter((msg) => msg.id !== userMsg.id && msg.id !== thinkingId));
-      setNotice(e.message);
+      setNotice({ text: e.message, tone: "warn" });
       setInput(t);
+      return;
+    }
+    // 줄이 꽉 찼거나 기다리다 시간이 다 됐다 — 고칠 건 없고 잠시 뒤 다시 보내면 된다.
+    if (e instanceof ServiceBusyError) {
+      setMsgs((m) => m.filter((msg) => msg.id !== userMsg.id && msg.id !== thinkingId));
+      setNotice({ text: e.message, tone: "calm" });
+      setInput(t);   // 쓴 이야기는 그대로 돌려준다
       return;
     }
     /* 그 외(네트워크·콜드스타트 등) → 로컬 규칙 답장 유지 */
@@ -247,19 +261,29 @@ export default function MomoChat() {
 
         {notice && (
           <div
-            role="alert"
+            role="status"
+            aria-live="polite"
             style={{
               margin: "0 18px 8px",
               padding: "10px 12px",
               borderRadius: 12,
-              background: "rgba(255,138,138,.12)",
-              border: "1px solid rgba(255,138,138,.35)",
-              color: "#ffb4b4",
               fontSize: 13,
               lineHeight: 1.5,
+              ...(notice.tone === "warn"
+                ? {
+                    background: "rgba(255,138,138,.12)",
+                    border: "1px solid rgba(255,138,138,.35)",
+                    color: "#ffb4b4",
+                  }
+                : {
+                    // 기다리는 중 — 보랏빛 계열로 차분하게. 경고색을 쓰지 않는다.
+                    background: "rgba(124,111,232,.14)",
+                    border: "1px solid rgba(163,148,247,.35)",
+                    color: "#cfc6ff",
+                  }),
             }}
           >
-            {notice}
+            {notice.text}
           </div>
         )}
 

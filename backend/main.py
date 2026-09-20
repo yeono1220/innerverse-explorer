@@ -62,6 +62,24 @@ from validation import (
     too_long_message,
 )
 
+# LLM 호출 입장 관리 — 선착순 N건만 내보내고 나머지는 줄을 세운다(모모챗 전용).
+from admission import (
+    AdmissionGate,
+    BUSY_NOTICE,
+    QUEUE_NOTICE,
+    QueueFull,
+    QueueTimeout,
+)
+
+llm_gate = AdmissionGate(
+    capacity=settings.LLM_CONCURRENCY,
+    max_waiting=settings.LLM_QUEUE_MAX,
+    wait_timeout=settings.LLM_QUEUE_TIMEOUT,
+    name="momo",
+)
+print(f"[main] 모모챗 입장 관리 — 동시 {llm_gate.capacity}건 / "
+      f"대기 최대 {llm_gate.max_waiting}명 / 대기 제한 {llm_gate.wait_timeout:.0f}초")
+
 # 인증 게이트 (auth.py) — 모든 /api/* 는 Supabase 로그인 사용자만 호출 가능
 from auth import CurrentUser, auth_settings, auth_status, require_user, user_rate_limit
 from auth_routes import router as auth_router
@@ -672,6 +690,8 @@ def health():
             "context_items": settings.MAX_CONTEXT_ITEMS,
             "diaries_items": settings.MAX_DIARIES_ITEMS,
         },
+        # 모모챗 대기열 현황 — 줄이 실제로 서는지 여기서 확인한다.
+        "momo_queue": llm_gate.stats(),
         "auth": auth_status(),
     }
 
@@ -766,10 +786,23 @@ async def momo_reply(
             if escalate and req.isLinkAgreed else ""
         ),
     )
-    reply = await asyncio.to_thread(
-        _gen_text_momo, system_prompt, user_prompt,
-        call_type="momo_reply", session_id=req.session_id,
-    )
+    try:
+        ticket = llm_gate.reserve()
+    except QueueFull:
+        raise HTTPException(status_code=503,
+                            detail={"code": "llm_busy", "message": BUSY_NOTICE})
+    try:
+        await ticket.wait()
+        reply = await asyncio.to_thread(
+            _gen_text_momo, system_prompt, user_prompt,
+            call_type="momo_reply", session_id=req.session_id,
+        )
+    except QueueTimeout:
+        raise HTTPException(status_code=503,
+                            detail={"code": "llm_busy", "message": BUSY_NOTICE})
+    finally:
+        ticket.release()
+
     if not reply:
         if escalate:
             reply = "많이 힘들었구나. 지금은 저보다 전문가의 도움이 필요한 순간 같아요. 비대면 상담을 연결해 드릴까요?"
@@ -814,34 +847,70 @@ async def momo_reply_stream(
         ),
     )
 
-    def event_source():
+    # 입장권은 스트림을 '열기 전에' 뽑는다.
+    # 아직 200 헤더가 안 나갔으므로, 줄이 꽉 찬 경우엔 503 으로 정직하게 거절할 수 있다.
+    try:
+        ticket = llm_gate.reserve()
+    except QueueFull:
+        raise HTTPException(status_code=503,
+                            detail={"code": "llm_busy", "message": BUSY_NOTICE})
+
+    async def event_source():
         t0 = time.perf_counter()
         ttft = None
-        # escalate 는 LLM 없이 이미 계산돼 있으니 먼저 보낸다
-        # ensure_ascii=False로 전송량 최소화
-        yield f"data: {json.dumps({'type': 'meta', 'escalate': escalate}, ensure_ascii=False)}\n\n"
-        try : 
-            for chunk in _gen_stream_momo(system_prompt, user_prompt, call_type="momo_reply_stream", session_id=req.session_id):
+        try:
+            # escalate 는 LLM 없이 이미 계산돼 있으니 먼저 보낸다
+            # ensure_ascii=False로 전송량 최소화
+            yield f"data: {json.dumps({'type': 'meta', 'escalate': escalate}, ensure_ascii=False)}\n\n"
+
+            # 내 앞에 사람이 있으면 '예약했어요'를 먼저 알리고 기다린다.
+            # 사용자는 아무것도 다시 누르지 않는다 — 차례가 오면 아래가 알아서 이어진다.
+            if ticket.queued:
+                yield "data: " + json.dumps(
+                    {"type": "queued", "position": ticket.position,
+                     "message": QUEUE_NOTICE}, ensure_ascii=False) + "\n\n"
+            try:
+                waited = await ticket.wait()
+            except QueueTimeout:
+                yield "data: " + json.dumps(
+                    {"type": "busy", "message": BUSY_NOTICE}, ensure_ascii=False) + "\n\n"
+                return
+
+            if waited > 0:
+                print(f"[admission] 대기 {waited:.1f}s 후 통과 session={req.session_id}")
+                t0 = time.perf_counter()  # TTFT 는 '차례가 온 뒤'부터 재야 의미가 있다
+
+            # 동기 제너레이터를 한 조각씩 스레드에서 당겨온다(이벤트 루프를 막지 않도록).
+            chunks = _gen_stream_momo(system_prompt, user_prompt,
+                                      call_type="momo_reply_stream",
+                                      session_id=req.session_id)
+            _END = object()
+
+            def _next_chunk():
+                try:
+                    return next(chunks)
+                except StopIteration:
+                    return _END
+
+            while True:
+                chunk = await asyncio.to_thread(_next_chunk)
+                if chunk is _END:
+                    break
                 if ttft is None:
                     ttft = time.perf_counter() - t0
                     print(f"[momo-metrics] TTFT={ttft*1000:.0f}ms session={req.session_id}")
                 yield f"data: {json.dumps({'type': 'delta', 'text': chunk}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
-        except Exception:
+        except asyncio.CancelledError:
+            raise  # 사용자가 창을 닫음 — finally 에서 자리만 반납한다
+        except Exception as ex:
             # ⚠️ 이미 200 헤더가 나갔으므로 HTTPException 을 던져도 소용없다.
+            print(f"[main] momo stream 실패: {ex}")
             yield f"data: {json.dumps({'type': 'error'})}\n\n"
-        ''' SSE 프로토콜 폐기   
-        # 현재 Analyzer 계약은 완성 텍스트 생성이다. 완성 응답도 SSE 계약으로 전달한다.
-        reply = _gen_text_momo(
-            system_prompt,
-            user_prompt,
-            call_type="momo_reply_stream",
-            session_id=req.session_id,
-        ) or "그 마음 충분히 그럴 수 있어. 오늘은 작은 한 걸음만 같이 떠올려보자."
-        yield f"data: {json.dumps({'type': 'delta', 'text': reply})}\n\n"
-        # 끝났다는 신호
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
-        '''
+        finally:
+            # 어떤 경로로 빠져나가든 자리를 반납해야 다음 사람이 들어온다.
+            # 이게 빠지면 한 명이 슬롯을 영영 물고 있게 된다.
+            ticket.release()
 
     return StreamingResponse(
         event_source(),

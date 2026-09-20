@@ -112,6 +112,17 @@ class Settings:
     MAX_DIARIES_ITEMS: int = int(os.getenv("MAX_DIARIES_ITEMS", "31"))    # 주간/장기기억 배치
     MAX_MESSAGE_ITEMS: int = int(os.getenv("MAX_MESSAGE_ITEMS", "200"))   # 하루치 모모챗 대화
 
+    # ── LLM 호출 입장 관리 (admission.py) ──────────────────────
+    # 동시에 공급자로 내보내는 모모챗 요청 수. 초과분은 줄을 서고, 앞사람이
+    # 끝나면 '자동으로' 승급된다(사용자가 다시 보낼 필요 없음).
+    #   · 줄이 LLM_QUEUE_MAX 를 넘으면 즉시 거절
+    #   · LLM_QUEUE_TIMEOUT 초 안에 차례가 안 오면 포기
+    # ⚠️ 프로세스 1개 기준. uvicorn --workers N 이면 실제 동시 호출은 N배가 된다.
+    # 💡 큐 동작을 눈으로 보려면 LLM_CONCURRENCY=1 로 두고 창 두 개에서 동시에 보내보라.
+    LLM_CONCURRENCY: int = int(os.getenv("LLM_CONCURRENCY", "150"))
+    LLM_QUEUE_MAX: int = int(os.getenv("LLM_QUEUE_MAX", "10"))
+    LLM_QUEUE_TIMEOUT: float = float(os.getenv("LLM_QUEUE_TIMEOUT", "30"))
+
     CORS_ORIGINS: list[str] = (
         os.getenv("CORS_ORIGINS", "*").split(",")
         if os.getenv("CORS_ORIGINS")

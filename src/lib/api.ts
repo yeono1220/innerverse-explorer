@@ -37,11 +37,30 @@ export class InputRejectedError extends Error {
   }
 }
 
-/** !res.ok 를 던지기 — 422 만 InputRejectedError 로 갈라낸다. */
+/**
+ * 지금은 줄이 꽉 차서 못 받는 상태(503).
+ * 장애가 아니라 '혼잡'이다 — message 는 사용자에게 그대로 보여줄 포근한 안내문구.
+ */
+export class ServiceBusyError extends Error {
+  readonly code = "llm_busy";
+  constructor(message: string) {
+    super(message);
+    this.name = "ServiceBusyError";
+  }
+}
+
+/** !res.ok 를 던지기 — 422(입력 거절)와 503(혼잡)을 갈라낸다. */
 async function raiseHttpError(res: Response, label: string): Promise<never> {
   if (res.status === 422) {
     const body = await res.json().catch(() => null);
     throw new InputRejectedError(body, `${label} ${res.status}`);
+  }
+  if (res.status === 503) {
+    const body = await res.json().catch(() => null);
+    const msg = body?.detail?.message;
+    throw new ServiceBusyError(
+      typeof msg === "string" ? msg : "지금은 조금 붐벼요. 잠시 뒤에 다시 대화할까요?",
+    );
   }
   throw new Error(`${label} ${res.status}`);
 }
@@ -171,6 +190,11 @@ export async function momoReplyStream(
     history?: string[]; profile?: string; session_id?: string;
   },
   onDelta: (textSoFar: string) => void,
+  /**
+   * 내 앞에 대기자가 있어 '예약'된 순간 한 번 호출된다.
+   * 사용자는 아무것도 다시 누르지 않는다 — 차례가 오면 onDelta 가 알아서 이어진다.
+   */
+  onQueued?: (info: { position: number; message: string }) => void,
 ): Promise<{ reply: string; escalate: boolean }> {
   const res = await fetch(`${API_BASE}/api/momo/reply/stream`, {
     method: "POST",
@@ -197,6 +221,10 @@ export async function momoReplyStream(
       if (!part.startsWith("data: ")) continue;
       const ev = JSON.parse(part.slice(6));
       if (ev.type === "meta") escalate = ev.escalate;
+      // 줄을 섰다 — 기다리는 동안 보여줄 안내. 연결은 그대로 열려 있다.
+      if (ev.type === "queued") onQueued?.({ position: ev.position, message: ev.message });
+      // 제한 시간 안에 차례가 안 왔다 — 스트림은 여기서 정상 종료된다.
+      if (ev.type === "busy") throw new ServiceBusyError(ev.message);
       if (ev.type === "delta") {
         reply += ev.text;
         onDelta(stripMomoSpeakerPrefix(reply));
