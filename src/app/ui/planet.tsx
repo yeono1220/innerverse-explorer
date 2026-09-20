@@ -1,6 +1,7 @@
 // 2D 행성 + 모모 — 저폴리 결정면(faceted) SVG. /home 정20면체 행성과 같은 결.
 // color/size API는 그대로라 모든 화면(12곳)에 드롭인.
 import { useId, useMemo } from "react";
+import { AssetImage, MOMO_IMAGE_SRC } from "./AssetImage";
 import { PlanetColor, PLANET_COLORS } from "@/store/userStore";
 
 interface Tone {
@@ -127,5 +128,9 @@ export function Planet2D({
 }
 
 export function Momo2D({ size = 64 }: { size?: number }) {
-  return <div className="iv-momo" style={{ "--m-size": `${size}px` } as React.CSSProperties} aria-hidden="true" />;
+  return (
+    <AssetImage src={MOMO_IMAGE_SRC} size={size}>
+      <div className="iv-momo" style={{ "--m-size": `${size}px` } as React.CSSProperties} aria-hidden="true" />
+    </AssetImage>
+  );
 }

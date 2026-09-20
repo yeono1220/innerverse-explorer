@@ -1,5 +1,6 @@
 // 12 · 인벤토리 (3열 그리드, 별조각으로 구매)
 import { useEffect, useRef, useState } from "react";
+import { AssetImage, itemImageSrc } from "../ui/AssetImage";
 import { StatusBar, AppBar, Body } from "../ui/layout";
 import { Chip, Button, CapLabel } from "../ui/primitives";
 import { useAppStore } from "@/store/appStore";
@@ -95,7 +96,9 @@ export default function Inventory() {
                   position: "relative",
                 }}
               >
-                <div style={{ fontSize: 34 }}>{it.emoji}</div>
+                <AssetImage src={itemImageSrc(it.id)} size={44} alt={it.name}>
+                  <div style={{ fontSize: 34 }}>{it.emoji}</div>
+                </AssetImage>
                 <div style={{ fontSize: 11, color: "var(--iv-txt2)" }}>{it.name}</div>
                 {!it.owned && (
                   <div style={{ position: "absolute", top: 6, right: 6, fontSize: 10, color: "#e8c45f", fontWeight: 700 }}>
@@ -137,7 +140,9 @@ export default function Inventory() {
               gap: 12,
             }}
           >
-            <div style={{ fontSize: 36 }}>{sel.emoji}</div>
+            <AssetImage src={itemImageSrc(sel.id)} size={48} alt={sel.name}>
+              <div style={{ fontSize: 36 }}>{sel.emoji}</div>
+            </AssetImage>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 700 }}>{sel.name}</div>
               <div style={{ fontSize: 11, color: "var(--iv-txt2)" }}>
