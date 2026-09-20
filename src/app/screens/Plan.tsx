@@ -136,7 +136,7 @@ export default function Plan() {
           <div className="iv-section-h" style={{ color: "#fff" }}>
             이너버스 플러스 · 월 {won(PLUS_PRICE_WON)}원
           </div>
-          <Bullet ok>모모 대화 무제한</Bullet>
+          <Bullet ok>모모 대화 무제한 (베타 기간엔 하루 10턴)</Bullet>
           <Bullet ok>일기 무제한 · 원문 영구 보관</Bullet>
           <Bullet ok>월·분기 장기 감정 패턴 분석</Bullet>
           <Button
