@@ -1,5 +1,5 @@
 // 폰 프레임 + 상태바 + 앱바 + 탭바 + 아이콘 버튼 (모든 화면 공유)
-import { ReactNode } from "react";
+import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 // 폰 위(스테이지)에 띄우는 리드 문구. 경로별로 정의 — 정의된 화면에서만 노출된다.
@@ -16,23 +16,62 @@ const PAGE_LEAD: Record<string, { k: string; h1: string; p: string }> = {
   },
 };
 
+type PageLead = { k: string; h1: string; p: string };
+const PageLeadContext = createContext<{
+  setLead: (lead: PageLead | null) => void;
+}>({ setLead: () => undefined });
+
+/**
+ * 이 화면의 리드 문구를 폰 위(스테이지)에 띄운다.
+ *
+ * 객체가 아니라 '값'으로 비교한다. 객체 그대로를 의존성에 두면
+ * usePageLead({ ... }) 처럼 인라인으로 넘긴 화면이 매 렌더마다 새 객체를 만들어
+ * effect 재실행 → setState → 재렌더 가 무한히 도는 사고가 난다.
+ * (useMemo 로 감싸야만 안전한 API 는 언젠가 반드시 누가 밟는다.)
+ */
+export function usePageLead(lead: PageLead | null) {
+  const { setLead } = useContext(PageLeadContext);
+  const k = lead?.k;
+  const h1 = lead?.h1;
+  const p = lead?.p;
+  useEffect(() => {
+    setLead(k === undefined ? null : { k, h1: h1 ?? "", p: p ?? "" });
+    return () => setLead(null);
+  }, [k, h1, p, setLead]);
+}
+
 export function PhoneFrame({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
-  const lead = PAGE_LEAD[pathname];
+
+  // 화면이 usePageLead 로 직접 지정한 리드. 없으면 null.
+  const [screenLead, setScreenLead] = useState<PageLead | null>(null);
+
+  // ⚠️ 예전에는 pathname 이 바뀔 때 useEffect 로 리드를 덮어썼는데,
+  //    React 는 자식 effect 를 부모보다 먼저 실행한다. 그래서 화면이
+  //    usePageLead 로 넣은 값을 부모 effect 가 곧바로 null 로 지워버렸다
+  //    (= WeeklyReview 가 리드를 넣는데도 화면에 안 뜨던 원인).
+  //    경로 기본값은 effect 없이 렌더 중에 계산하고, 화면이 지정한 값을 우선한다.
+  const lead = screenLead ?? PAGE_LEAD[pathname] ?? null;
+
+  // context 값도 고정한다. 매 렌더마다 새 객체면 소비자의 effect 가 매번 다시 돈다.
+  const ctx = useMemo(() => ({ setLead: setScreenLead }), []);
+
   return (
-    <div className="iv-page">
-      {lead && (
-        <div className="iv-page-lead">
-          <div className="iv-k">{lead.k}</div>
-          <h1 style={{ whiteSpace: "pre-line" }}>{lead.h1}</h1>
-          <p>{lead.p}</p>
+    <PageLeadContext.Provider value={ctx}>
+      <div className="iv-page">
+        {lead && (
+          <div className="iv-page-lead">
+            <div className="iv-k">{lead.k}</div>
+            <h1 style={{ whiteSpace: "pre-line" }}>{lead.h1}</h1>
+            <p>{lead.p}</p>
+          </div>
+        )}
+        <div className="iv-phone">
+          <div className="iv-phone-notch" />
+          <div className="iv-phone-screen">{children}</div>
         </div>
-      )}
-      <div className="iv-phone">
-        <div className="iv-phone-notch" />
-        <div className="iv-phone-screen">{children}</div>
       </div>
-    </div>
+    </PageLeadContext.Provider>
   );
 }
 

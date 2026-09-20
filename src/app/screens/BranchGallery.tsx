@@ -1,7 +1,7 @@
 // 27 · 7갈래 진화 갤러리 (만개/평온/애정/긴장/분노/시듦/공허)
 import { useNavigate } from "react-router-dom";
-import { StatusBar, AppBar, Body } from "../ui/layout";
-import { Card, CapLabel } from "../ui/primitives";
+import { StatusBar, AppBar, Body, usePageLead } from "../ui/layout";
+import { Card } from "../ui/primitives";
 import { Planet2D } from "../ui/planet";
 
 const BRANCHES = [
@@ -14,21 +14,22 @@ const BRANCHES = [
   { key: "void", color: "void" as const, name: "공허", desc: "비어있는 마음, 파편만 떠다님", trigger: "공허가 대표 감정일 때" },
 ];
 
+// 폰 위(스테이지)에 띄우는 리드 문구. 문구는 그대로, 위치만 화면 밖으로 옮겼다.
+// 컴포넌트 밖에 두어야 매 렌더마다 새 객체가 되지 않는다(usePageLead 의 effect 가 매번 재실행되는 걸 막음).
+const PAGE_LEAD = {
+  k: "EVOLUTION BRANCHES",
+  h1: "감정이 행성을 빚어요",
+  p: "누적된 대표 감정의 비율에 따라 행성은 일곱 갈래로 진화해요.",
+};
+
 export default function BranchGallery() {
   const nav = useNavigate();
+  usePageLead(PAGE_LEAD);
   return (
     <>
       <StatusBar />
       <AppBar back title="7분기 진화" />
       <Body>
-        <div style={{ textAlign: "center" }}>
-          <CapLabel>EVOLUTION BRANCHES</CapLabel>
-          <h2 style={{ fontSize: 21, fontWeight: 800, marginTop: 6 }}>감정이 행성을 빚어요</h2>
-          <p style={{ fontSize: 12.5, color: "var(--iv-txt2)", marginTop: 6, lineHeight: 1.6 }}>
-            누적된 대표 감정의 비율에 따라 행성은 일곱 갈래로 진화해요.
-          </p>
-        </div>
-
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {BRANCHES.map((b) => (
             <Card key={b.key}>

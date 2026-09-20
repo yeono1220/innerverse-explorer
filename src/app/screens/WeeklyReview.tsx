@@ -1,8 +1,8 @@
 // 06 · 일주일 리뷰 — 감정 풍경 + 감정 위아래(밸런스) 그래프 + AI 회고 요약
 import { useEffect, useMemo, useState } from "react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, ReferenceLine, Tooltip } from "recharts";
-import { StatusBar, AppBar, Body } from "../ui/layout";
-import { Card, CapLabel } from "../ui/primitives";
+import { StatusBar, AppBar, Body, usePageLead } from "../ui/layout";
+import { Card } from "../ui/primitives";
 import { EmotionBar, EmotionDot } from "../ui/emotion";
 import { useDiaryStore, weekSummary, type DiaryEntry } from "@/store/diaryStore";
 import { weeklyReview } from "@/lib/api";
@@ -32,6 +32,16 @@ export default function WeeklyReview() {
   const sum = weekSummary(week);
   const dominant = sum[0];
 
+  const pageLead = useMemo(
+    () => ({
+      k: "WEEKLY LANDSCAPE",
+      h1: `이번 주는 ${dominant?.label ?? "차분"}의 결`,
+      p: `총 ${week.length}개의 기록 · 평균 감정 풍성도 ${Math.min(100, week.length * 14)}%`,
+    }),
+    [dominant?.label, week.length],
+  );
+  usePageLead(pageLead);
+
   const valenceData = useMemo(
     () => week.slice().reverse().map((e) => ({ day: (e.date ?? "").slice(5).replace("-", "/"), v: entryValence(e) })),
     [week],
@@ -51,26 +61,6 @@ export default function WeeklyReview() {
       <StatusBar />
       <AppBar title="이번 주 리뷰" />
       <Body tabbed>
-        <div style={{ textAlign: "center" }}>
-          <CapLabel>WEEKLY LANDSCAPE</CapLabel>
-          <h2 style={{ fontSize: 22, fontWeight: 800, marginTop: 6 }}>
-            이번 주는{" "}
-            <span
-              style={{
-                color: dominant
-                  ? `var(--iv-emo-${dominant.label === "차분" ? "calm" : dominant.label === "기쁨" ? "joy" : dominant.label === "사랑" ? "love" : dominant.label === "슬픔" ? "sad" : dominant.label === "긴장" ? "tension" : dominant.label === "분노" ? "anger" : "empty"})`
-                  : "var(--iv-purple2)",
-              }}
-            >
-              {dominant?.label ?? "차분"}
-            </span>
-            의 결
-          </h2>
-          <p style={{ fontSize: 12.5, color: "var(--iv-txt2)", marginTop: 8, lineHeight: 1.6 }}>
-            총 {week.length}개의 기록 · 평균 감정 풍성도 {Math.min(100, week.length * 14)}%
-          </p>
-        </div>
-
         <Card>
           <div className="iv-section-h">감정 흐름 (위 = 긍정 / 아래 = 부정)</div>
           {valenceData.length >= 2 ? (
