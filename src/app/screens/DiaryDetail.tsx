@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { StatusBar, AppBar, Body, IconButton } from "../ui/layout";
 import { Card } from "../ui/primitives";
+import { InsightCard } from "../ui/InsightCard";
 import { EmotionBar, EmotionTag } from "../ui/emotion";
 import { useDiaryStore } from "@/store/diaryStore";
 
@@ -132,6 +133,8 @@ export default function DiaryDetail() {
             ))}
           </div>
         </Card>
+
+        <InsightCard insight={entry.insight} />
 
         <Card>
           <div className="iv-section-h">키워드</div>

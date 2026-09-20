@@ -5,6 +5,7 @@ import { StatusBar, AppBar, Body } from "../ui/layout";
 import { Card, Button, CapLabel } from "../ui/primitives";
 import { Planet2D } from "../ui/planet";
 import { EmotionBar, EmotionTag } from "../ui/emotion";
+import { InsightCard } from "../ui/InsightCard";
 import { useDiaryStore } from "@/store/diaryStore";
 import { useUserStore } from "@/store/userStore";
 
@@ -92,11 +93,15 @@ export default function EmotionResult() {
               </div>
             </Card>
 
-            <Card variant="purple">
-              <div style={{ fontSize: 13.5, lineHeight: 1.6 }}>
-                오늘은 ‘{entry.primary}’의 결이 도드라졌어요. 행성 표면이 살짝 다르게 빛나기 시작했어요.
-              </div>
-            </Card>
+            {entry.insight ? (
+              <InsightCard insight={entry.insight} />
+            ) : (
+              <Card variant="purple">
+                <div style={{ fontSize: 13.5, lineHeight: 1.6 }}>
+                  오늘은 ‘{entry.primary}’의 결이 도드라졌어요. 행성 표면이 살짝 다르게 빛나기 시작했어요.
+                </div>
+              </Card>
+            )}
 
             <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
               <Button variant="ghost" block onClick={() => nav(`/diary/${entry.id}`, { replace: true })}>

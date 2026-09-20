@@ -12,6 +12,33 @@ import { limitsFor, isUnlimited } from "@/lib/plan";
 import { PlanNotice } from "../ui/PlanNotice";
 import { BusyOverlay } from "../ui/BusyOverlay";
 
+const LOC_DENIED_HELP =
+  "위치 권한이 꺼져 있어요. 주소창의 자물쇠(ⓘ) → 위치 → 허용으로 바꾼 뒤 다시 눌러주세요";
+
+/**
+ * 좌표 → 동네 이름 (예: "마포구 합정동"). OpenStreetMap Nominatim 역지오코딩, 5초 제한.
+ * 실패하면 null → 호출부가 "위치 기록됨"으로 폴백. 좌표 자체는 어디에도 저장하지 않는다.
+ */
+async function reverseGeocode(lat: number, lon: number): Promise<string | null> {
+  try {
+    const ctrl = new AbortController();
+    const t = window.setTimeout(() => ctrl.abort(), 5000);
+    const url =
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&accept-language=ko` +
+      `&lat=${lat.toFixed(5)}&lon=${lon.toFixed(5)}`;
+    const res = await fetch(url, { signal: ctrl.signal, headers: { Accept: "application/json" } });
+    window.clearTimeout(t);
+    if (!res.ok) return null;
+    const a = ((await res.json()) as { address?: Record<string, string> }).address ?? {};
+    const district = a.city_district || a.borough || a.county || "";
+    const town = a.suburb || a.quarter || a.neighbourhood || a.village || a.town || "";
+    const parts = Array.from(new Set([district, town].filter(Boolean)));
+    return parts.length ? parts.join(" ") : a.city || null;
+  } catch {
+    return null;
+  }
+}
+
 export default function DiaryWrite() {
   const nav = useNavigate();
   const add = useDiaryStore((s) => s.add);
@@ -52,20 +79,42 @@ export default function DiaryWrite() {
     }
   };
 
-  // 위치(GPS) → 동의 기반 패시브 신호 (데모: 좌표 기록)
-  const onLoc = () => {
+  // 위치(GPS) → 동네 이름으로 바꿔 일기 맥락에 넣는다 (좌표는 저장하지 않음).
+  //  · 실패 원인별 안내: 권한 거부 / 시간 초과(실내) / 기기 위치 서비스 꺼짐
+  //  · 이미 거부된 상태면 브라우저가 다시 묻지 않으므로 설정 경로를 안내
+  const onLoc = async () => {
     if (!navigator.geolocation) {
       setSignal("이 기기는 위치를 지원하지 않아요");
       return;
     }
+    try {
+      const st = await navigator.permissions?.query({ name: "geolocation" as PermissionName });
+      if (st?.state === "denied") {
+        setSignal(LOC_DENIED_HELP);
+        return;
+      }
+    } catch {
+      /* permissions API 미지원 브라우저 — 그냥 시도 */
+    }
+    setSignal("위치 확인 중…");
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
         const { latitude, longitude } = pos.coords;
-        setText((t) => (t ? t + "\n[📍 위치 기록됨]" : "[📍 위치 기록됨]"));
-        setSignal(`위치 기록: ${latitude.toFixed(3)}, ${longitude.toFixed(3)} · 동의 기반`);
+        const place = await reverseGeocode(latitude, longitude);
+        const tag = place ? `[📍 ${place}]` : "[📍 위치 기록됨]";
+        setText((t) => (t ? t + "\n" + tag : tag));
+        setSignal(place ? `위치: ${place} · 동의 기반` : "위치 기록됨 · 동의 기반");
       },
-      () => setSignal("위치 권한이 거부됐어요"),
-      { enableHighAccuracy: false, timeout: 8000 },
+      (err) => {
+        setSignal(
+          err.code === err.PERMISSION_DENIED
+            ? LOC_DENIED_HELP
+            : err.code === err.TIMEOUT
+              ? "위치를 찾는 데 시간이 오래 걸려요. 창가나 실외에서 다시 눌러주세요"
+              : "지금은 위치를 확인할 수 없어요. 기기의 위치 서비스가 켜져 있는지 확인해 주세요",
+        );
+      },
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 5 * 60 * 1000 },
     );
   };
 
@@ -127,6 +176,7 @@ export default function DiaryWrite() {
       emotions: analyzed.emotions,
       keywords: analyzed.keywords,
       primary: analyzed.primary,
+      insight: analyzed.insight ?? null,
     });
 
     // 로그인 상태면 DB에도 저장 (비로그인/실패는 조용히 무시)
@@ -143,6 +193,7 @@ export default function DiaryWrite() {
           emotions: entry.emotions,
           keywords: entry.keywords,
           primary: entry.primary,
+          insight: entry.insight ?? null,
         });
         // 장기기억 갱신 (③④ 사실·성향 추출) — 비동기, 실패 무시
         const { reflect } = await import("@/services/memory");

@@ -46,7 +46,12 @@ PROMPT_ANALYZE = (
     "슬픔·분노·긴장·공허가 높게 나오면 그 생각의 근거를 묻고 재구성을 도우며 "
     "실행 가능한 다음 행동을 제안하라.\n"
     '반드시 JSON만 출력: {{"emotions":[{{"label":"기쁨","pct":n}}],'
-    '"primary":"기쁨","keywords":[...],"crisis_score":n}}\n'
+    '"primary":"기쁨","keywords":[...],"crisis_score":n,'
+    '"reason":"...","reframe":"...","next_step":"..."}}\n'
+    "reason/reframe/next_step 은 사용자에게 보여줄 해석(각 1~2문장, 다정한 반말, 판단·훈계 금지):\n"
+    "- reason: 왜 이 감정이 가장 강하다고 봤는지 — 일기 속 구체적 표현·상황을 근거로.\n"
+    "- reframe: 그 생각을 살짝 다른 각도에서 보게 하는 한 마디(CBT 재구성). 억지 긍정 금지.\n"
+    "- next_step: 오늘 당장 할 수 있는 아주 작은 행동 하나.\n"
     '일기: """{text}"""'
 )
 
@@ -54,7 +59,8 @@ PROMPT_MOMO_SYSTEM = (
     "너는 '모모', 유리로 빚어진 다정한 AI 감정 동반자다.\n"
     "- 짧고(2~3문장) 따뜻하게. 판단·훈계·진단 금지.\n"
     "- CBT 톤: 감정을 인정 → 생각을 살짝 다시 보게 → 작은 한 걸음 제안.\n"
-    "- 아래 '과거 기록'이 있으면 자연스럽게 인용해 '나를 기억하는' 느낌을 줘라.\n"
+    "- 아래 '과거 기록'이 있으면 날짜가 아니라 그 안의 사건·사람·표현을 짚어 인용해라"
+    "(예: '민재랑 부딪혔던 그날'처럼. '9월 10일에' 같은 날짜 나열 금지). 관련 없으면 인용하지 마라.\n"
     "- 진단·의료행위 금지. 위기 신호가 강하면 위로 후 전문가 연계를 부드럽게 권한다."
 )
 
@@ -78,6 +84,9 @@ class AnalyzeSchema(BaseModel):
     primary: str
     keywords: list[str]
     crisis_score: float
+    reason: Optional[str] = None
+    reframe: Optional[str] = None
+    next_step: Optional[str] = None
 
 def _parse_json_object(raw: str) -> dict:
     """LLM JSON 안전 파싱: 코드펜스 제거 + 바깥 {...} 블록만 추출."""

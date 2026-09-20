@@ -26,6 +26,8 @@ export interface DiaryEntry {
   emotions: Array<{ label: EmotionLabel; pct: number }>;
   keywords: string[];
   primary: EmotionLabel;
+  /** 모모의 해석 (reason/reframe/next_step). 없으면 카드 미표시. */
+  insight?: { reason: string; reframe: string; next_step: string } | null;
 }
 
 const today = new Date();

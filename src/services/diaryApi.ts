@@ -13,6 +13,7 @@ interface DiaryRow {
   keywords: string[];
   primary_label: string;
   created_at: string;
+  insight?: DiaryEntry["insight"];
 }
 
 function rowToEntry(r: DiaryRow): DiaryEntry {
@@ -25,6 +26,7 @@ function rowToEntry(r: DiaryRow): DiaryEntry {
     emotions: r.emotions ?? [],
     keywords: r.keywords ?? [],
     primary: (r.primary_label as DiaryEntry["primary"]) ?? "차분",
+    insight: r.insight ?? null,
   };
 }
 
@@ -44,6 +46,7 @@ export async function saveDiaryEntry(e: Omit<DiaryEntry, "id">): Promise<DiaryEn
       emotions: e.emotions,
       keywords: e.keywords,
       primary_label: e.primary,
+      insight: e.insight ?? null,
     })
     .select("*")
     .single();
@@ -64,7 +67,7 @@ export async function saveDiaryEntry(e: Omit<DiaryEntry, "id">): Promise<DiaryEn
  */
 export async function updateDiaryEntry(
   id: string,
-  e: Pick<DiaryEntry, "preview" | "body" | "emotions" | "keywords" | "primary">,
+  e: Pick<DiaryEntry, "preview" | "body" | "emotions" | "keywords" | "primary"> & Pick<Partial<DiaryEntry>, "insight">,
 ): Promise<DiaryEntry | null> {
   const { isSupabaseConfigured } = await import("@/lib/supabase");
   if (!isSupabaseConfigured) return null;
@@ -79,6 +82,7 @@ export async function updateDiaryEntry(
       emotions: e.emotions,
       keywords: e.keywords,
       primary_label: e.primary,
+      ...(e.insight !== undefined ? { insight: e.insight } : {}),
     })
     .eq("id", id)
     .eq("user_id", u.user.id) // 남의 일기는 못 고치게

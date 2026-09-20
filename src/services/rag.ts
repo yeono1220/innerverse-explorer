@@ -12,6 +12,13 @@ interface MatchRow {
   similarity: number;
 }
 
+/** 프롬프트에 넣는 본문 발췌 길이. 3편 × 이 길이 ≈ 300토큰 내외. */
+const EXCERPT = 140;
+function excerpt(body: string | null | undefined): string {
+  const t = (body ?? "").replace(/\s+/g, " ").trim();
+  return t.length > EXCERPT ? t.slice(0, EXCERPT) + "…" : t;
+}
+
 export interface MemoryHit {
   snippet: string; // 프롬프트 주입용
   preview: string; // 화면 표시용
@@ -27,9 +34,10 @@ export async function ragContext(text: string, k = 3): Promise<MemoryHit[]> {
       const { data } = await getSupabase().rpc("match_diaries", { query_embedding: vec, match_count: k });
       const rows = (data as MatchRow[] | null) ?? [];
       if (rows.length) {
-        // 과거 raw 차단: 모델엔 원문 대신 '날짜·감정' 포인터만. 과거 내용은 요약(③④)으로만 참조.
+        // 모델에 날짜·감정 + 본문 발췌를 함께 준다. 포인터만 주면 "지난주 그 일 어떻게 됐어?"에
+        // 답하지 못한다(데모 핵심). 발췌 길이는 EXCERPT 로 제한.
         return rows.map((r) => ({
-          snippet: `${r.date ?? ""}에 '${r.primary_label ?? ""}' 감정의 기록이 있었어`,
+          snippet: `[${r.date ?? ""} · ${r.primary_label ?? ""}] ${excerpt(r.body)}`,
           preview: `${r.date ?? ""} · ${r.primary_label ?? ""}`,
         }));
       }
@@ -42,8 +50,7 @@ export async function ragContext(text: string, k = 3): Promise<MemoryHit[]> {
   try {
     const recent = await listDiaryEntries();
     return recent.slice(0, k).map((d) => ({
-      // 과거 raw 차단: 원문 미포함(날짜·감정 포인터만)
-      snippet: `${d.date}에 '${d.primary}' 감정의 기록이 있었어`,
+      snippet: `[${d.date} · ${d.primary}] ${excerpt(d.body)}`,
       preview: `${d.date} · ${d.primary}`,
     }));
   } catch {

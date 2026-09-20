@@ -40,6 +40,9 @@ import AvatarJourney from "./app/screens/AvatarJourney";
 import { DioramaScene } from "./diorama/DioramaScene";
 import Landing from "./pages/Landing";
 import { AuthBootstrap } from "./app/AuthBootstrap";
+import { lazy, Suspense } from "react";
+// 개발 전용 렌더 도구 (프로덕션 번들 제외)
+const MomoRender = import.meta.env.DEV ? lazy(() => import("./dev/MomoRender")) : null;
 
 const queryClient = new QueryClient();
 
@@ -107,6 +110,16 @@ const App = () => (
           <Route path="/glass" element={<DioramaScene />} />
           {/* 피치/랜딩 페이지 (폰 프레임 없는 풀 마케팅 페이지) */}
           <Route path="/pitch" element={<Landing />} />
+          {MomoRender && (
+            <Route
+              path="/dev/momo-render"
+              element={
+                <Suspense fallback={null}>
+                  <MomoRender />
+                </Suspense>
+              }
+            />
+          )}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
