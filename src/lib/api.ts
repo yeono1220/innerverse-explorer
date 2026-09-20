@@ -7,6 +7,45 @@ import { getSession } from "@/services/auth";
 const API_BASE =
   (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_URL ?? "";
 
+/**
+ * 서버 입력 검증 실패(422).
+ * 백엔드(validation.py)가 내려주는 message 는 사용자에게 그대로 보여줄 수 있는
+ * 안내문구다 — 화면에서 이 값을 직접 쓰면 된다.
+ * 이걸 일반 Error 로 뭉개면 "백엔드가 죽었다"와 구분이 안 돼서
+ * 폴백 답장만 나가고 원인이 사용자에게도 개발자에게도 안 보인다.
+ */
+export class InputRejectedError extends Error {
+  readonly code: string;
+  readonly field?: string;
+  readonly limit?: number;
+  readonly actual?: number;
+  readonly unit?: string;
+
+  constructor(body: Record<string, unknown> | null, fallback: string) {
+    super(typeof body?.message === "string" ? body.message : fallback);
+    this.name = "InputRejectedError";
+    this.code = typeof body?.code === "string" ? body.code : "invalid_input";
+    this.field = typeof body?.field === "string" ? body.field : undefined;
+    this.limit = typeof body?.limit === "number" ? body.limit : undefined;
+    this.actual = typeof body?.actual === "number" ? body.actual : undefined;
+    this.unit = typeof body?.unit === "string" ? body.unit : undefined;
+  }
+
+  /** 길이 초과인가 (그 외 422 는 형식 오류) */
+  get isTooLong(): boolean {
+    return this.code === "input_too_long";
+  }
+}
+
+/** !res.ok 를 던지기 — 422 만 InputRejectedError 로 갈라낸다. */
+async function raiseHttpError(res: Response, label: string): Promise<never> {
+  if (res.status === 422) {
+    const body = await res.json().catch(() => null);
+    throw new InputRejectedError(body, `${label} ${res.status}`);
+  }
+  throw new Error(`${label} ${res.status}`);
+}
+
 /** 모델이 쓴 해석 — 결과 화면 '모모의 해석'. 휴리스틱 폴백이면 없음. */
 export interface DiaryInsight {
   reason: string;
@@ -43,7 +82,7 @@ export async function analyzeDiary(text: string, audio?: Blob): Promise<DiaryAna
     body: fd,
     headers: { ...(await authHeaders()) },
   });
-  if (!res.ok) throw new Error(`analyze ${res.status}`);
+  if (!res.ok) await raiseHttpError(res, "analyze");
   const data = (await res.json()) as AnalyzeApiResponse;
 
   const emotions = (data.diary?.emotions ?? []).map((e) => ({
@@ -117,7 +156,7 @@ export async function momoReply(input: {
     headers: { ...(await authHeaders()), "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  if (!res.ok) throw new Error(`momo ${res.status}`);
+  if (!res.ok) await raiseHttpError(res, "momo");
   return (await res.json()) as { reply: string; escalate: boolean };
 }
 
@@ -138,7 +177,8 @@ export async function momoReplyStream(
     headers: { ...(await authHeaders()), "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  if (!res.ok || !res.body) throw new Error(`momo ${res.status}`);
+  if (!res.ok) await raiseHttpError(res, "momo");
+  if (!res.body) throw new Error("momo: 응답 본문이 비어 있음");
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();

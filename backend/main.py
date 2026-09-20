@@ -23,8 +23,11 @@ import asyncio
 
 import os
 import shutil
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -41,6 +44,23 @@ app = FastAPI(title="Innerverse AI Backend", version="0.1.0")
 # 🚨 CORS — 배포 시 CORS_ORIGINS 를 실제 프론트 도메인으로 좁힐 것 (config.py)
 from config import settings
 from schema import attach_colors, branch_of, BRANCHES, EMOTION_LABELS
+
+# 입력 검증 — 모모챗 답변 생성 전에 정규화하고, 상한을 넘으면 자르기
+from validation import (
+    FIELD_LABELS,
+    ChatText,
+    ContextList,
+    DiaryList,
+    DiaryText,
+    HistoryList,
+    InputTooLong,
+    ProfileText,
+    ShortField,
+    ShortId,
+    Snippet,
+    ensure_text,
+    too_long_message,
+)
 
 # 인증 게이트 (auth.py) — 모든 /api/* 는 Supabase 로그인 사용자만 호출 가능
 from auth import CurrentUser, auth_settings, auth_status, require_user, user_rate_limit
@@ -86,6 +106,56 @@ app.add_middleware(
 
 # /api/auth/* — 이메일 회원가입·로그인·토큰 갱신 (+ 카카오 '준비 중' 안내)
 app.include_router(auth_router)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 입력 검증 실패 → 사용자가 그대로 읽을 수 있는 안내문구
+#   pydantic 기본 422 본문은 영어 에러 배열이라 화면에 띄울 수 없다.
+#   상한 초과만 code="input_too_long" 으로 갈라내서, 프론트가 message 를
+#   토스트에 그대로 꽂을 수 있게 한다. (그 외는 일반 안내 + detail 은 디버그용)
+# ─────────────────────────────────────────────────────────────────────────────
+@app.exception_handler(RequestValidationError)
+async def handle_validation_error(request, exc: RequestValidationError):
+    for err in exc.errors():
+        if err.get("type") not in ("string_too_long", "too_long"):
+            continue
+        # loc 예: ("body", "context", 2) → 인덱스를 빼고 필드명만 남긴다.
+        loc = [p for p in err.get("loc", ()) if isinstance(p, str) and p != "body"]
+        field = next((p for p in reversed(loc) if p in FIELD_LABELS),
+                     loc[-1] if loc else "입력")
+        value = err.get("input")
+        unit = "개" if isinstance(value, list) else "자"
+        actual = len(value) if isinstance(value, (str, list)) else None
+        limit = (err.get("ctx") or {}).get("max_length")
+        return JSONResponse(status_code=422, content={
+            "status": "error",
+            "code": "input_too_long",
+            "field": field,
+            "limit": limit,
+            "actual": actual,
+            "unit": unit,
+            "message": too_long_message(field, limit, actual, unit=unit),
+        })
+    return JSONResponse(status_code=422, content={
+        "status": "error",
+        "code": "invalid_input",
+        "message": "입력 형식이 올바르지 않습니다. 잠시 후 다시 시도해 주세요.",
+        "detail": jsonable_encoder(exc.errors()),
+    })
+
+
+@app.exception_handler(InputTooLong)
+async def handle_input_too_long(request, exc: InputTooLong):
+    """Form 엔드포인트(/api/analyze, /api/insights)처럼 모델을 안 거치는 경로."""
+    return JSONResponse(status_code=422, content={
+        "status": "error",
+        "code": "input_too_long",
+        "field": exc.field,
+        "limit": exc.limit,
+        "actual": exc.actual,
+        "unit": exc.unit,
+        "message": str(exc),
+    })
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 공통 타입
@@ -136,17 +206,18 @@ class AnalyzeResponse(BaseModel):
     insight: Optional[DiaryInsight] = None
 
 class MomoReplyRequest(BaseModel):
-    text: str
+    # 상한은 config.py(MAX_*)에서 환경변수로 조절. 넘으면 호출 전에 422.
+    text: ChatText  # 모모챗 발화 (짧게)
     emotions: Optional[EmotionScores] = None
-    history: list[str] = Field(default_factory=list)
-    context: list[str] = Field(default_factory=list)  # RAG: 검색된 과거 일기 스니펫
-    profile: str = ""  # ③④ 사실·성향 요약 (항상 주입되는 장기기억)
+    history: HistoryList = []  # 직전 대화 — 프롬프트엔 뒤 6개만 들어간다
+    context: ContextList = []  # RAG: 검색된 과거 일기 스니펫 (앞 3개만 사용)
+    profile: ProfileText = ""  # ③④ 사실·성향 요약 (항상 주입되는 장기기억)
     isLinkAgreed : bool = False # 전문가 연계는 사용자가 동의 하에 진행
-    session_id: Optional[str] = None  # 모모챗 세션 식별(성능 9지표 로깅용)
+    session_id: Optional[ShortId] = None  # 모모챗 세션 식별(성능 9지표 로깅용)
 
 
 class EmbedRequest(BaseModel):
-    text: str
+    text: DiaryText
 
 
 class EmbedResponse(BaseModel):
@@ -156,9 +227,9 @@ class EmbedResponse(BaseModel):
 
 # ── 장기기억 추출기 (③ 사실 / ④ 성향 / 관계) ──
 class ReflectRequest(BaseModel):
-    diaries: list[str] = Field(default_factory=list)
-    fact_summary: Optional[str] = None
-    persona_summary: Optional[str] = None
+    diaries: DiaryList = []
+    fact_summary: Optional[ProfileText] = None
+    persona_summary: Optional[ProfileText] = None
 
 
 class ReflectFact(BaseModel):
@@ -181,7 +252,7 @@ class ReflectResponse(BaseModel):
 
 
 class WeeklyReq(BaseModel):
-    diaries: list[str] = Field(default_factory=list)
+    diaries: DiaryList = []
 
 
 class WeeklyAIResponse(BaseModel):
@@ -195,7 +266,7 @@ class MomoReplyResponse(BaseModel):
 
 
 class CrisisCheckRequest(BaseModel):
-    text: str
+    text: DiaryText
 
 
 class CrisisCheckResponse(BaseModel):
@@ -219,19 +290,21 @@ class WeeklyReviewResponse(BaseModel):
 
 # diary Message draft test
 class MomoDiaryMessage(BaseModel):
-    who: Optional[str] = None
-    when : Optional[str] = None
-    how : Optional[str] = None
-    what : Optional[str] = None
-    where : Optional[str] = None
-    why : Optional[str] = None
-    text : Optional[str] = "" # 육하원칙 분석 실패시 text 뭉치로 반환
-    role : Optional[str] = None # 사용자(id)
-    content : Optional[str] = None # 텍스트 외의 데이터(음성, 사진)
+    who: Optional[ShortField] = None
+    when : Optional[ShortField] = None
+    how : Optional[ShortField] = None
+    what : Optional[ShortField] = None
+    where : Optional[ShortField] = None
+    why : Optional[ShortField] = None
+    text : Optional[ChatText] = "" # 육하원칙 분석 실패시 text 뭉치로 반환
+    role : Optional[ShortField] = None # 사용자(id)
+    content : Optional[ChatText] = None # 텍스트 외의 데이터(음성, 사진)
 
 class MomoDiaryRequest(BaseModel):
-    messages: list[MomoDiaryMessage] = Field(default_factory=list)
-    session_id: Optional[str] = None  # 모모챗 세션 식별(대화 마무리 요약용)
+    messages: Annotated[
+        list[MomoDiaryMessage], Field(max_length=settings.MAX_MESSAGE_ITEMS)
+    ] = []
+    session_id: Optional[ShortId] = None  # 모모챗 세션 식별(대화 마무리 요약용)
 
 class MomoDiaryResponse(BaseModel):
     diary:str
@@ -497,6 +570,10 @@ def get_analyzer() -> Analyzer:
             from analyzers import DummyAnalyzer
             _analyzer = DummyAnalyzer()
         print(f"[main] Analyzer Loaded: {_analyzer.name}")
+        print(f"[main] 입력 상한 — 모모챗 {settings.MAX_CHAT_CHARS}자 / "
+              f"일기 {settings.MAX_DIARY_CHARS}자 "
+              f"(history {settings.MAX_HISTORY_CHARS}자·{settings.MAX_HISTORY_ITEMS}개, "
+              f"context {settings.MAX_SNIPPET_CHARS}자·{settings.MAX_CONTEXT_ITEMS}개)")
     return _analyzer
 
 @app.get("/")
@@ -584,6 +661,17 @@ def health():
         "vllm_base_url": provider_url,
         "vllm_model": settings.VLLM_MODEL or None,
         "fallback_to_dummy": settings.FALLBACK_TO_DUMMY,
+        # 적용 중인 입력 상한. 코드가 실제로 반영됐는지 여기서 바로 확인한다.
+        "input_limits": {
+            "chat_chars": settings.MAX_CHAT_CHARS,
+            "diary_chars": settings.MAX_DIARY_CHARS,
+            "history_chars": settings.MAX_HISTORY_CHARS,
+            "snippet_chars": settings.MAX_SNIPPET_CHARS,
+            "profile_chars": settings.MAX_PROFILE_CHARS,
+            "history_items": settings.MAX_HISTORY_ITEMS,
+            "context_items": settings.MAX_CONTEXT_ITEMS,
+            "diaries_items": settings.MAX_DIARIES_ITEMS,
+        },
         "auth": auth_status(),
     }
 
@@ -611,7 +699,9 @@ async def analyze_diary(
     """일기(text/audio) → 7감정 + dominant + keywords + crisis_score
     응답 규격 = 프론트 diaryStore(7감정) / lib/api.ts 와 1:1.
     analyzer.analyze() 우선, 실패 시 휴리스틱 폴백."""
-    extracted_text = text_data or ""
+    # Form 파라미터는 pydantic 모델을 안 거치므로 여기서 직접 정규화·상한 검사.
+    extracted_text = ensure_text(text_data, field="text_data",
+                                 max_chars=settings.MAX_DIARY_CHARS)
 
     # 음성 → (Phase 4) Whisper STT. 현재는 임시 저장 후 플레이스홀더.
     if audio_file:
@@ -965,6 +1055,9 @@ async def insights(extracted_text: str = Form(""),
     Phase 5 목표는 집계·차분 프라이버시 기반 B2B 인사이트(개인 식별 불가)이며, 현재는
     단일 텍스트 분석 결과를 그대로 내려주는 단계.
     """
+    extracted_text = ensure_text(extracted_text, field="extracted_text",
+                                 max_chars=settings.MAX_DIARY_CHARS)
+
     # 1. 분석: 텍스트를 분석기에 전달하고 결과(색 후처리 포함)를 받는다.
     analysis = await _run_analysis(extracted_text or "")
 

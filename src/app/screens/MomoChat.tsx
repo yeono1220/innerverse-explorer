@@ -5,7 +5,7 @@ import { StatusBar, AppBar, Body, IconButton } from "../ui/layout";
 import { Momo2D } from "../ui/planet";
 import { EmotionDot } from "../ui/emotion";
 import type { EmotionLabel } from "@/store/diaryStore";
-import { momoReplyStream } from "@/lib/api";
+import { momoReplyStream, InputRejectedError } from "@/lib/api";
 import { ragContext } from "@/services/rag";
 import { getMemory, memoryPromptBlock } from "@/services/memory";
 import { CareSheet } from "../ui/CareSheet";
@@ -60,6 +60,8 @@ export default function MomoChat() {
   ]);
   const [input, setInput] = useState("");
   const [careOpen, setCareOpen] = useState(false);
+  // 서버가 입력을 거절했을 때의 안내문구 (길이 초과 등). null 이면 안 보인다.
+  const [notice, setNotice] = useState<string | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -97,6 +99,7 @@ export default function MomoChat() {
   // 퀘스트 판정은 화면 상태가 아니라 "오늘 누적 발화 수"(usageStore)로 센다.
   // 대화 도중 뒤로 갔다가 다시 들어와도 이어서 카운트된다.
   if (useUsageStore.getState().chatTurns >= MOMO_QUEST_TURNS) completeQuest("q2");
+  setNotice(null);  // 새로 보내면 직전 안내는 지운다
   const rule = REPLIES.find((r) => r.keys.test(t));
   const crisis = CRISIS_RE.test(t);
   const userMsg: Msg = { id: Date.now(), who: "me", text: t, emo: crisis ? "슬픔" : rule?.emo };
@@ -133,8 +136,16 @@ export default function MomoChat() {
   reply = r.reply;
     // if (r?.reply) reply = r.reply;
   if (r?.escalate) window.setTimeout(() => setCareOpen(true), 700);
-  } catch {
-    /* 백엔드 실패 → 로컬 규칙 답장 유지 */
+  } catch (e) {
+    // 입력 검증 실패(422)는 '서버가 죽었다'와 완전히 다른 상황이다.
+    // → 안내문구를 띄우고, 방금 쓴 글은 입력창에 돌려준다.
+    if (e instanceof InputRejectedError) {
+      setMsgs((m) => m.filter((msg) => msg.id !== userMsg.id && msg.id !== thinkingId));
+      setNotice(e.message);
+      setInput(t);
+      return;
+    }
+    /* 그 외(네트워크·콜드스타트 등) → 로컬 규칙 답장 유지 */
   }
   // '생각 중' 버블을 실제 답장으로 교체
   setMsgs((m) => m.map((msg) => (msg.id === thinkingId ? { ...msg, text: reply, memory } : msg)));
@@ -233,6 +244,24 @@ export default function MomoChat() {
             </button>
           ))}
         </div>
+
+        {notice && (
+          <div
+            role="alert"
+            style={{
+              margin: "0 18px 8px",
+              padding: "10px 12px",
+              borderRadius: 12,
+              background: "rgba(255,138,138,.12)",
+              border: "1px solid rgba(255,138,138,.35)",
+              color: "#ffb4b4",
+              fontSize: 13,
+              lineHeight: 1.5,
+            }}
+          >
+            {notice}
+          </div>
+        )}
 
         <form
           onSubmit={(e) => {

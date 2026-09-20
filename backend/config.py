@@ -91,6 +91,27 @@ class Settings:
     # 분석 실패 시 더미로 폴백할지. 개발/데모 중엔 True 가 편하다.
     FALLBACK_TO_DUMMY: bool = os.getenv("FALLBACK_TO_DUMMY", "true").lower() == "true"
 
+    # ── 입력 상한 (모모챗 답변 생성 전 검증) ──────────────────────────
+    # 상한을 넘는 입력은 API 로 넘기지 않고 422 + 안내문구로 거절한다.
+    # 조용히 자르지 않는 이유: 사용자가 쓴 일기 뒷부분이 말없이 사라지는 게 더 나쁜 사고.
+    # 실제 로그(momo_metrics 의 prompt_tokens)를 보고 조정
+    # 두 입력은 성격이 다르므로 상한도 다르다.
+    #   모모챗 → 1000자 내외 / 일기 -> 2500자 내외
+    MAX_CHAT_CHARS: int = int(os.getenv("MAX_CHAT_CHARS", "1000"))        # 모모챗 발화 1건
+    MAX_DIARY_CHARS: int = int(os.getenv("MAX_DIARY_CHARS", "2500"))      # 일기 본문 1건
+    MAX_PROFILE_CHARS: int = int(os.getenv("MAX_PROFILE_CHARS", "2000"))  # 장기기억 요약(항상 주입)
+    MAX_SNIPPET_CHARS: int = int(os.getenv("MAX_SNIPPET_CHARS", "1000"))  # context(RAG 스니펫) 1건
+    # history 1건은 "me: <사용자가 방금 쓴 글>" 통째로 들어온다(MomoChat.tsx:113).
+    # 모모챗 상한보다 작으면 '발화는 통과했는데 history 에서 422' 라는 모순이 생긴다.
+    # → 모모챗 상한 + 화자 접두사 여유분으로 따라가게 둔다.
+    MAX_HISTORY_CHARS: int = int(os.getenv("MAX_HISTORY_CHARS", str(MAX_CHAT_CHARS + 64)))
+    MAX_SHORT_CHARS: int = int(os.getenv("MAX_SHORT_CHARS", "300"))       # 육하원칙 token, role 등
+    MAX_ID_CHARS: int = int(os.getenv("MAX_ID_CHARS", "128"))             # session_id 등
+    MAX_HISTORY_ITEMS: int = int(os.getenv("MAX_HISTORY_ITEMS", "20"))    # 프롬프트엔 뒤 6개만 쓰임
+    MAX_CONTEXT_ITEMS: int = int(os.getenv("MAX_CONTEXT_ITEMS", "8"))     # 프롬프트엔 앞 3개만 쓰임
+    MAX_DIARIES_ITEMS: int = int(os.getenv("MAX_DIARIES_ITEMS", "31"))    # 주간/장기기억 배치
+    MAX_MESSAGE_ITEMS: int = int(os.getenv("MAX_MESSAGE_ITEMS", "200"))   # 하루치 모모챗 대화
+
     CORS_ORIGINS: list[str] = (
         os.getenv("CORS_ORIGINS", "*").split(",")
         if os.getenv("CORS_ORIGINS")
