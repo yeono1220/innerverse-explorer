@@ -12,6 +12,7 @@ export interface ProfileRow {
   level: number;
   streak: number;
   stardust: number;
+  last_check_in?: string | null; // 0015. YYYY-MM-DD
   // 0009 마이그레이션 이후에만 존재. 미적용 DB에서는 undefined로 들어온다.
   level_exp?: number | null;
   mileage_earned?: number | null;
@@ -25,6 +26,7 @@ export interface ProgressPatch {
   level: number;
   level_exp: number;
   streak: number;
+  last_check_in: string | null;
   stardust: number;
   mileage_earned: number;
   discount_won: number;

@@ -61,6 +61,7 @@ begin
     planet_name     = '이음의 행성',
     planet_color    = 'green',
     streak          = 5,
+    last_check_in   = current_date - 1,  -- 어제 출석 → 오늘 출석하면 6일차로 이어짐 (0015)
     level           = 1,
     level_exp       = 12,
     stardust        = 18,

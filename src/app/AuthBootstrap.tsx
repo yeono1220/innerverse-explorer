@@ -34,6 +34,7 @@ export function AuthBootstrap() {
             level: s.level,
             level_exp: s.levelExp,
             streak: s.streak,
+            last_check_in: s.lastCheckIn,
             stardust: s.stardust,
             mileage_earned: s.mileageEarned,
             discount_won: s.discountWon,
@@ -74,6 +75,8 @@ export function AuthBootstrap() {
                 level: p.level ?? START_LEVEL,
                 levelExp: p.level_exp ?? 0,
                 streak: p.streak ?? 0,
+                // 0015 이전 DB엔 컬럼이 없어 undefined → 로컬 값 유지
+                ...(p.last_check_in !== undefined ? { lastCheckIn: p.last_check_in } : {}),
                 stardust: p.stardust ?? 0,
                 mileageEarned: p.mileage_earned ?? 0,
                 discountWon: p.discount_won ?? 0,

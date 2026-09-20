@@ -67,6 +67,8 @@ class Settings:
     # ── Claude(Anthropic) 설정 ──
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
     CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
+    # thinking 깊이. low|medium|high. 짧은 공감 답장엔 low 가 지연·비용 모두 유리.
+    CLAUDE_EFFORT: str = os.getenv("CLAUDE_EFFORT", "low")
     # 워크스페이스에 묶이지 않은(조직 레벨) 키는 요청마다 anthropic-workspace-id 헤더가 필요하다.
     # 워크스페이스 스코프 키를 쓰면 비워 둬도 된다.
     ANTHROPIC_WORKSPACE_ID: str = os.getenv("ANTHROPIC_WORKSPACE_ID", "")

@@ -25,6 +25,12 @@ interface Msg {
 
 const SUGGESTIONS = ["조금 무기력해", "오늘 좀 신났어", "긴장돼서 잠이 안 와", "그냥 평범한 하루였어"];
 
+// 위기 신호 — 백엔드(_CRISIS_TERMS)와 같은 단어. 네트워크·콜드스타트와 무관하게
+// 프론트에서도 즉시 잡아 상담 카드를 띄운다(안전장치는 서버 응답에 의존하면 안 됨).
+const CRISIS_RE = /자해|자살|죽고\s*싶|죽고|사라지고\s*싶|없어지고\s*싶|끝내고\s*싶|살기\s*싫/;
+const CRISIS_FALLBACK =
+  "지금 이렇게 말해줘서 고마워. 많이 힘들었구나. 혼자 견디지 않아도 돼 — 지금 바로 자살예방상담전화 1393(24시간, 무료)에 연결할 수 있어. 내가 여기 같이 있을게.";
+
 const REPLIES: Array<{ keys: RegExp; reply: string; emo: EmotionLabel }> = [
   { keys: /무기력|공허|텅|허무/, reply: "텅 빈 느낌이 들었구나. 그런 날엔 무언가 안 해도 괜찮아.", emo: "공허" },
   { keys: /사랑|보고싶|그리워|애틋|설레|따뜻/, reply: "따뜻한 마음이 번졌구나. 그 온기 오래 간직해 🌸", emo: "사랑" },
@@ -86,7 +92,10 @@ export default function MomoChat() {
   // 대화 도중 뒤로 갔다가 다시 들어와도 이어서 카운트된다.
   if (useUsageStore.getState().chatTurns >= MOMO_QUEST_TURNS) completeQuest("q2");
   const rule = REPLIES.find((r) => r.keys.test(t));
-  const userMsg: Msg = { id: Date.now(), who: "me", text: t, emo: rule?.emo };
+  const crisis = CRISIS_RE.test(t);
+  const userMsg: Msg = { id: Date.now(), who: "me", text: t, emo: crisis ? "슬픔" : rule?.emo };
+  // 위기 신호는 서버 응답을 기다리지 않고 바로 연계 카드를 연다.
+  if (crisis) window.setTimeout(() => setCareOpen(true), 400);
 
   // 사용자 메시지 + '생각 중' 버블을 즉시 표시 → 멈춘 느낌 제거
   const thinkingId = userMsg.id + 1;
@@ -97,7 +106,7 @@ export default function MomoChat() {
   const history = [...msgs, userMsg].slice(-6).map((m) => `${m.who}: ${m.text}`);
 
     // RAG: 과거 일기 검색 → 모모 답장에 컨텍스트 주입
-  let reply = rule?.reply ?? "조금 더 들려줄래? 어떤 순간이었는지.";
+  let reply = crisis ? CRISIS_FALLBACK : rule?.reply ?? "조금 더 들려줄래? 어떤 순간이었는지.";
   let memory: string[] = [];
   try {
     // 서로 독립인 두 조회를 병렬로 (직렬 → 병렬)

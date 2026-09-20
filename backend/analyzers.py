@@ -383,6 +383,10 @@ class ClaudeAnalyzer(_LLMAnalyzer):
             # temperature=temperature, 
             system=sys_prompt,
             messages=[{"role": "user", "content": user}],
+            # 2~3문장 공감 답장·7감정 JSON엔 깊은 thinking이 과함 — effort=low 로
+            # 지연(22s→수 초)과 출력 토큰(=비용)을 함께 줄인다. adaptive thinking 은 유지.
+            # SDK 버전과 무관하게 전달되도록 extra_body 사용.
+            extra_body={"output_config": {"effort": settings.CLAUDE_EFFORT}},
         )
         return "".join(getattr(b, "text", "") for b in msg.content if getattr(b, "type", "") == "text")
 
