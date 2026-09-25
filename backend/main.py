@@ -647,7 +647,6 @@ def health():
     return {
         "status": "ok",
         "analyzer_backend": settings.ANALYZER_BACKEND,   # 축 1 (설정값)
-        **llm_budget_status(),
         "active_analyzer": a.name,                        # 축 1 (실제 로드)
         # 축 2 는 vLLM 을 실제로 쓸 때만 의미. 그 외엔 None 으로 표시.
         "vllm_provider": getattr(a, "provider_name", None),
@@ -714,6 +713,7 @@ def health():
     return {
         "status": "ok",
         "analyzer_backend": settings.ANALYZER_BACKEND,   # 설정값
+        **llm_budget_status(),   # 오늘 LLM 호출 수 / 일일 상한
         "active_analyzer": _analyzer.name,         # 실제 활성(폴백 반영)
         "vllm_provider": settings.VLLM_PROVIDER,           # 설정값
         "vllm_provider_resolved": provider_name or None,
