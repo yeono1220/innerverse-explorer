@@ -410,6 +410,25 @@ def user_rate_limit(bucket: str, limit: int, window: float = 60.0):
     return _dep
 
 
+def llm_guard(bucket: str, per_min: int):
+    """
+    LLM 을 부르는 엔드포인트용 — user_rate_limit(분당) 에 더해
+      · 사용자(uid)별 하루 상한 (RL_LLM_PER_DAY)
+      · IP 별 하루 상한 (RL_LLM_PER_IP_PER_DAY) — 익명 uid 재발급 우회 대비
+    를 한 번에 건다. 초과 시 429. 프론트는 429 를 규칙 기반 폴백으로 처리한다.
+    """
+    from config import settings as _cfg
+
+    def _dep(request: Request, user: CurrentUser = Depends(require_user)) -> CurrentUser:
+        enforce_rate_limit(f"{bucket}:{user.id}", per_min, 60.0, "요청이 너무 잦아요. 잠시 후 다시 시도해 주세요.")
+        enforce_rate_limit(f"day:{user.id}", _cfg.RL_LLM_PER_DAY, 86400.0, "오늘 AI 사용량을 다 썼어요. 내일 다시 만나요.")
+        enforce_rate_limit(f"ip:{client_ip(request)}", _cfg.RL_LLM_PER_IP_PER_DAY, 86400.0,
+                           "이 네트워크의 오늘 AI 사용량이 많아요. 내일 다시 시도해 주세요.")
+        return user
+
+    return _dep
+
+
 def ip_rate_limit(request: Request, bucket: str, limit: int, window: float, message: str) -> None:
     """토큰 없는 엔드포인트(로그인/회원가입)용 — IP 기준."""
     enforce_rate_limit(f"{bucket}:{client_ip(request)}", limit, window, message)

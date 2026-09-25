@@ -1,7 +1,8 @@
 // 03 · 홈 (아바타 + 모모 행성 + 진입 카드들)
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { StatusBar, AppBar, Body, IconButton } from "../ui/layout";
+import { Onboarding, hasOnboarded } from "../ui/Onboarding";
 import { Card, CapLabel } from "../ui/primitives";
 import { HomeAvatarStage } from "../ui/HomeAvatarStage";
 import { LevelBar } from "../ui/LevelBar";
@@ -17,6 +18,7 @@ export default function Home() {
   const user = useUserStore();
   const unread = useAppStore((s) => s.notifications.filter((n) => n.unread).length);
   const quests = useAppStore((s) => s.quests);
+  const [showOnboarding, setShowOnboarding] = useState(() => !hasOnboarded());
   const questsDate = useAppStore((s) => s.questsDate);
   const ensureQuestsForToday = useAppStore((s) => s.ensureQuestsForToday);
   useEffect(() => {
@@ -35,6 +37,7 @@ export default function Home() {
 
   return (
     <>
+      {showOnboarding && <Onboarding onDone={() => setShowOnboarding(false)} />}
       <StatusBar />
       <AppBar
         left={

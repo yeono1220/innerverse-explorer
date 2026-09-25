@@ -6,6 +6,7 @@ import { Card, Button, CapLabel } from "../ui/primitives";
 import { Planet2D } from "../ui/planet";
 import { EmotionBar, EmotionTag } from "../ui/emotion";
 import { InsightCard } from "../ui/InsightCard";
+import { ShareCardButton } from "../ui/ShareCardButton";
 import { useDiaryStore } from "@/store/diaryStore";
 import { useUserStore } from "@/store/userStore";
 
@@ -103,7 +104,10 @@ export default function EmotionResult() {
               </Card>
             )}
 
-            <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+            <div style={{ marginTop: 8 }}>
+              <ShareCardButton entry={entry} />
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
               <Button variant="ghost" block onClick={() => nav(`/diary/${entry.id}`, { replace: true })}>
                 일기 보기
               </Button>

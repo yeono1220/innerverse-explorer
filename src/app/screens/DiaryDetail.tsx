@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { StatusBar, AppBar, Body, IconButton } from "../ui/layout";
 import { Card } from "../ui/primitives";
 import { InsightCard } from "../ui/InsightCard";
+import { ShareCardButton } from "../ui/ShareCardButton";
 import { EmotionBar, EmotionTag } from "../ui/emotion";
 import { useDiaryStore } from "@/store/diaryStore";
 
@@ -86,6 +87,7 @@ export default function DiaryDetail() {
         title={formatDate(entry.date).slice(8)}
         right={
           <div style={{ display: "flex", gap: 4 }}>
+            <ShareCardButton entry={entry} icon />
             <IconButton onClick={() => nav(`/diary/${entry.id}/edit`)} ariaLabel="일기 수정">
               ✎
             </IconButton>

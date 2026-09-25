@@ -81,7 +81,18 @@ print(f"[main] 모모챗 입장 관리 — 동시 {llm_gate.capacity}건 / "
       f"대기 최대 {llm_gate.max_waiting}명 / 대기 제한 {llm_gate.wait_timeout:.0f}초")
 
 # 인증 게이트 (auth.py) — 모든 /api/* 는 Supabase 로그인 사용자만 호출 가능
-from auth import CurrentUser, auth_settings, auth_status, require_user, user_rate_limit
+import time
+# ── 에러 모니터링 (SENTRY_DSN 있을 때만) ──
+try:
+    from config import settings as _s0
+    if _s0.SENTRY_DSN:
+        import sentry_sdk
+        sentry_sdk.init(dsn=_s0.SENTRY_DSN, traces_sample_rate=0.1, environment="production")
+        print("[sentry] enabled")
+except Exception as _e:  # sentry 가 없어도 서비스는 떠야 한다
+    print(f"[sentry] init skipped: {_e}")
+
+from auth import CurrentUser, auth_settings, auth_status, require_user, user_rate_limit, llm_guard
 from auth_routes import router as auth_router
 
 # 모모챗 성능 9지표 — 이 모듈이 없어도 서버는 떠야 한다(측정은 부가 기능).
@@ -517,8 +528,34 @@ def _heuristic_analyze(text: str) -> AnalyzeResponse:
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 전역 일일 LLM 상한 — 바이럴/어뷰징으로 크레딧이 하루에 소진되는 사고 방지.
+# 프로세스 로컬 카운터(무료 인스턴스 1개 기준). 초과 시 호출부가 규칙 기반 폴백.
+# ─────────────────────────────────────────────────────────────────────────────
+_LLM_DAY = {"day": "", "n": 0}
+
+
+def llm_budget_take() -> bool:
+    today = time.strftime("%Y-%m-%d")
+    if _LLM_DAY["day"] != today:
+        _LLM_DAY["day"], _LLM_DAY["n"] = today, 0
+    if _LLM_DAY["n"] >= settings.LLM_DAILY_CAP:
+        return False
+    _LLM_DAY["n"] += 1
+    return True
+
+
+def llm_budget_status() -> dict:
+    today = time.strftime("%Y-%m-%d")
+    used = _LLM_DAY["n"] if _LLM_DAY["day"] == today else 0
+    return {"llm_calls_today": used, "llm_daily_cap": settings.LLM_DAILY_CAP}
+
+
 def _gen_text(system: str, user: str) -> Optional[str]:
     """analyzer.generate() 안전 래퍼 — 실패하면 None (호출부가 폴백 문구)."""
+    if not llm_budget_take():
+        print("[budget] 일일 LLM 상한 초과 → 폴백")
+        return None
     analyzer: Analyzer = build_analyzer()
     try:
         out = analyzer.generate(system, user)
@@ -547,6 +584,9 @@ def _gen_text_momo(system: str, user: str, *, call_type: str,
                    session_id: Optional[str] = None) -> Optional[str]:
     """모모챗 전용 generate — vLLM 이면 스트리밍 계측(9지표 로깅) 경로, 그 외엔 일반 generate.
     성능 로깅은 '모모챗에서만' 하므로 여기서만 generate_logged 를 탄다."""
+    if not llm_budget_take():
+        print("[budget] 일일 LLM 상한 초과 → 폴백")
+        return None
     analyzer: Analyzer = get_analyzer()
     if getattr(analyzer, "name", "") == "vllm" and hasattr(analyzer, "generate_logged"):
         try:
@@ -607,6 +647,7 @@ def health():
     return {
         "status": "ok",
         "analyzer_backend": settings.ANALYZER_BACKEND,   # 축 1 (설정값)
+        **llm_budget_status(),
         "active_analyzer": a.name,                        # 축 1 (실제 로드)
         # 축 2 는 vLLM 을 실제로 쓸 때만 의미. 그 외엔 None 으로 표시.
         "vllm_provider": getattr(a, "provider_name", None),
@@ -714,7 +755,7 @@ def debug_analyze(text: str = "오늘은 조금 지치고 불안했지만 그래
 async def analyze_diary(
     audio_file: UploadFile | None = File(None),
     text_data: str | None = Form(None),
-    user: CurrentUser = Depends(user_rate_limit("analyze", auth_settings.RL_LLM_PER_MIN)),
+    user: CurrentUser = Depends(llm_guard("analyze", auth_settings.RL_LLM_PER_MIN)),
 ):
     """일기(text/audio) → 7감정 + dominant + keywords + crisis_score
     응답 규격 = 프론트 diaryStore(7감정) / lib/api.ts 와 1:1.
@@ -738,7 +779,10 @@ async def analyze_diary(
 
     if not extracted_text.strip():
         return _heuristic_analyze(extracted_text)
-    
+    if not llm_budget_take():
+        print("[budget] 일일 LLM 상한 초과 → 휴리스틱")
+        return _heuristic_analyze(extracted_text)
+
     analyzer = build_analyzer()
     try:
         raw = await asyncio.to_thread(analyzer.analyze, extracted_text)
@@ -756,7 +800,7 @@ async def analyze_diary(
 @app.post("/api/momo/reply", response_model=MomoReplyResponse)
 async def momo_reply(
     req: MomoReplyRequest,
-    user: CurrentUser = Depends(user_rate_limit("momo", auth_settings.RL_LLM_PER_MIN)),
+    user: CurrentUser = Depends(llm_guard("momo", auth_settings.RL_LLM_PER_MIN)),
 ):
     """모모 공감 답장 — RAG(과거 일기 context) + 감정 주입 → analyzer.generate(); 실패 시 휴리스틱."""
     crisis = heuristic_crisis(req.text)
@@ -815,7 +859,7 @@ async def momo_reply(
 @app.post("/api/momo/reply/stream")
 async def momo_reply_stream(
     req: MomoReplyRequest,
-    user: CurrentUser = Depends(user_rate_limit("momo", auth_settings.RL_LLM_PER_MIN)),
+    user: CurrentUser = Depends(llm_guard("momo", auth_settings.RL_LLM_PER_MIN)),
 ):
     import json, time
     from fastapi.responses import StreamingResponse
@@ -929,7 +973,7 @@ PROMPT_MOMO_DIARY = (
 @app.post("/api/momo/diary", response_model=MomoDiaryResponse)
 async def momo_diary(
     req: MomoDiaryRequest,
-    user: CurrentUser = Depends(user_rate_limit("momo", auth_settings.RL_LLM_PER_MIN)),
+    user: CurrentUser = Depends(llm_guard("momo", auth_settings.RL_LLM_PER_MIN)),
 ):
     """당일 모모 대화 → 1인칭 일기 본문. 프론트 chatToDiary() 계약."""
     # def who(m): return "me" if (m.who or m.role or "").lower() in ("me", "user") else "momo"
@@ -977,7 +1021,7 @@ PROMPT_REFLECT = (
 
 @app.post("/api/reflect", response_model=ReflectResponse)
 def reflect(req: ReflectRequest,
-            user: CurrentUser = Depends(user_rate_limit("reflect", 10))):
+            user: CurrentUser = Depends(llm_guard("reflect", 10))):
     """최근 일기 → 사실/성향 요약·구조화 사실·관계 추출
     analyzer.generate() 로 JSON 유도 후 파싱. 실패/미설정이면 기존 값 유지."""
     import json
@@ -1035,12 +1079,14 @@ async def crisis_check(req: CrisisCheckRequest,
 
 @app.post("/api/vision", response_model=VisionResponse)
 async def vision(photo: UploadFile = File(...),
-                 user: CurrentUser = Depends(user_rate_limit("vision", 10))):
+                 user: CurrentUser = Depends(llm_guard("vision", 10))):
     """멀티모달 사진 분석 — 사진 속 장면·분위기를 일기 맥락으로.
     analyzer.analyze_image() 사용. 백엔드가 vision 미지원이거나 실패하면 스탑."""
     import base64
     #import json
 
+    if not llm_budget_take():
+        return VisionResponse(labels=["사진"], scene="(오늘 AI 사용량이 많아 잠시 쉬어가요)", emotion_hint=None)
     analyzer = build_analyzer()
     try:
         data = await photo.read()
@@ -1072,7 +1118,7 @@ PROMPT_WEEKLY = (
 
 @app.post("/api/weekly", response_model=WeeklyAIResponse)
 def weekly(req: WeeklyReq,
-           user: CurrentUser = Depends(user_rate_limit("weekly", 10))):
+           user: CurrentUser = Depends(llm_guard("weekly", 10))):
     """이번 주 일기 → AI 회고 요약 + 추천. 미설정/일기 없으면 기본 문구."""
     import json
 
@@ -1119,7 +1165,7 @@ async def weekly_review(uid: str, user: CurrentUser = Depends(require_user)):
 
 @app.post("/api/insights")
 async def insights(extracted_text: str = Form(""),
-                   user: CurrentUser = Depends(user_rate_limit("analyze", auth_settings.RL_LLM_PER_MIN))):
+                   user: CurrentUser = Depends(llm_guard("analyze", auth_settings.RL_LLM_PER_MIN))):
     """텍스트 → 분석기 결과(감정·관계) 반환.
     Phase 5 목표는 집계·차분 프라이버시 기반 B2B 인사이트(개인 식별 불가)이며, 현재는
     단일 텍스트 분석 결과를 그대로 내려주는 단계.

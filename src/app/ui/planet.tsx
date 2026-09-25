@@ -15,7 +15,7 @@ function hx(h: string): [number, number, number] {
 }
 
 // 구면 노멀 기반 라이팅으로 결정면 색을 계산해 삼각형 목록 생성.
-function buildFacets(size: number, c: Tone) {
+export function buildFacets(size: number, c: Tone) {
   const R = size / 2;
   const cx = R;
   const cy = R;

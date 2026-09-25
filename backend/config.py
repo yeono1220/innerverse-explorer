@@ -69,6 +69,18 @@ class Settings:
     CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
     # thinking 깊이. low|medium|high. 짧은 공감 답장엔 low 가 지연·비용 모두 유리.
     CLAUDE_EFFORT: str = os.getenv("CLAUDE_EFFORT", "low")
+
+    # ── 비용 상한 (바이럴·어뷰징 대비) ──
+    # 하루 전체 LLM 호출 상한. 초과하면 규칙 기반 폴백으로 동작(서비스는 살아 있음).
+    # Sonnet 5 기준 호출당 약 $0.007 → 3000회 ≈ $21/일.
+    LLM_DAILY_CAP: int = int(os.getenv("LLM_DAILY_CAP", "3000"))
+    # 사용자(uid)별 하루 LLM 호출 상한 (앱 10턴 제한의 서버측 이중 방어)
+    RL_LLM_PER_DAY: int = int(os.getenv("RL_LLM_PER_DAY", "80"))
+    # IP별 하루 상한 — 익명 uid 재발급으로 우회하는 스크립트 대비
+    RL_LLM_PER_IP_PER_DAY: int = int(os.getenv("RL_LLM_PER_IP_PER_DAY", "300"))
+
+    # ── 에러 모니터링 (선택) ──
+    SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
     # 워크스페이스에 묶이지 않은(조직 레벨) 키는 요청마다 anthropic-workspace-id 헤더가 필요하다.
     # 워크스페이스 스코프 키를 쓰면 비워 둬도 된다.
     ANTHROPIC_WORKSPACE_ID: str = os.getenv("ANTHROPIC_WORKSPACE_ID", "")
