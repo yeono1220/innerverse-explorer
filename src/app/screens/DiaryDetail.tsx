@@ -7,29 +7,6 @@ import { InsightCard } from "../ui/InsightCard";
 import { ShareCardButton } from "../ui/ShareCardButton";
 import { EmotionBar, EmotionTag } from "../ui/emotion";
 import { useDiaryStore } from "@/store/diaryStore";
-
-function Waveform({ active }: { active?: boolean }) {
-  const bars = 28;
-  return (
-    <div style={{ display: "flex", gap: 3, alignItems: "center", height: 36 }}>
-      {Array.from({ length: bars }).map((_, i) => {
-        const h = 8 + Math.abs(Math.sin(i * 1.3)) * 28;
-        return (
-          <div
-            key={i}
-            style={{
-              width: 3,
-              height: h,
-              borderRadius: 2,
-              background: active && i < bars * 0.45 ? "var(--iv-purple2)" : "rgba(255,255,255,.18)",
-            }}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
 function formatDate(iso: string) {
   const d = new Date(iso);
   return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 ${["일", "월", "화", "수", "목", "금", "토"][d.getDay()]}요일`;
@@ -103,24 +80,23 @@ export default function DiaryDetail() {
           <EmotionTag label={entry.primary} />
         </div>
 
+        {/* 음성은 텍스트로만 받아쓰고 오디오는 저장하지 않는다 — 재생 버튼 대신 기록 방식만 표시 */}
         {entry.audioSec > 0 && (
-          <Card size="sm">
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <button
-                className="iv-iconbtn"
-                style={{ background: "linear-gradient(135deg,#7c6fe8,#a394f7)", border: "none" }}
-                aria-label="재생"
-              >
-                ▶
-              </button>
-              <div style={{ flex: 1 }}>
-                <Waveform active />
-                <div style={{ fontSize: 11, color: "var(--iv-txt3)", marginTop: 4 }}>
-                  음성 기록 · {entry.audioSec}초
-                </div>
-              </div>
-            </div>
-          </Card>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              alignSelf: "flex-start",
+              fontSize: 11.5,
+              color: "var(--iv-txt2)",
+              background: "var(--iv-surf2)",
+              borderRadius: 999,
+              padding: "5px 11px",
+            }}
+          >
+            🎤 음성으로 기록 · {entry.audioSec}초
+          </div>
         )}
 
         <Card>
