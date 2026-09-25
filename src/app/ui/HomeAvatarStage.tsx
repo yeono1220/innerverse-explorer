@@ -8,6 +8,7 @@ import { useCurrentStage } from "@/diorama/growth";
 import { useEmotionStore, BRANCH } from "@/store/emotionStore";
 import { useUserStore, PLANET_COLORS, type PlanetColor } from "@/store/userStore";
 import { PlanetItems } from "@/planet-items/PlanetItems";
+import { PlanetPeople } from "@/planet-items/PlanetPeople";
 
 interface Props {
   size?: number;
@@ -16,9 +17,25 @@ interface Props {
   color?: PlanetColor;
   /** "rotating" 자체 회전 애니메이션 사용 (레벨업 화면 등) */
   rotating?: boolean;
+  /** 행성 위 사람(주민)을 탭했을 때. 지정하면 그 클릭은 onClick(행성 전체)으로 전파되지 않는다. */
+  onPerson?: (name: string) => void;
 }
 
-export function HomeAvatarStage({ size = 200, onClick, color, rotating }: Props) {
+export function HomeAvatarStage({ size = 200, onClick, color, rotating, onPerson }: Props) {
+  // R3F 의 mesh onClick 은 캔버스 DOM click 에서 먼저 실행되고 그 뒤 <button> 으로 버블링된다.
+  // 사람을 탭했을 땐 행성 전체 onClick(→ /glass)이 따라오지 않도록 한 번 삼킨다.
+  const swallowNext = useRef(false);
+  const handlePerson = (name: string) => {
+    swallowNext.current = true;
+    onPerson?.(name);
+  };
+  const handleClick = () => {
+    if (swallowNext.current) {
+      swallowNext.current = false;
+      return;
+    }
+    onClick?.();
+  };
   const userColor = useUserStore((s) => s.planetColor);
   const tone = PLANET_COLORS[color ?? userColor];
   const stage = useCurrentStage();
@@ -45,7 +62,7 @@ export function HomeAvatarStage({ size = 200, onClick, color, rotating }: Props)
 
   return (
     <button
-      onClick={onClick}
+      onClick={handleClick}
       className="iv-homestage"
       aria-label="모모 행성"
       style={{
@@ -88,6 +105,7 @@ export function HomeAvatarStage({ size = 200, onClick, color, rotating }: Props)
           soul={soul}
           stage={stage}
           rotating={!!rotating}
+          onPerson={onPerson ? handlePerson : undefined}
         />
       </Canvas>
     </button>
@@ -100,12 +118,14 @@ function PlanetWithMomo({
   soul,
   stage,
   rotating,
+  onPerson,
 }: {
   geo: THREE.IcosahedronGeometry;
   tone: (typeof PLANET_COLORS)[PlanetColor];
   soul: string;
   stage: ReturnType<typeof useCurrentStage>;
   rotating: boolean;
+  onPerson?: (name: string) => void;
 }) {
   // 행성 + 모모를 하나의 group으로 묶어 같이 회전 (있다면)
   const grpRef = useGroupRotation(rotating ? 0.35 : 0);
@@ -141,6 +161,9 @@ function PlanetWithMomo({
 
       {/* 인벤토리에서 구매한 아이템 — /glass 행성과 같은 자리에 놓인다 */}
       <PlanetItems radius={0.6} ratio={0.34} />
+
+      {/* 일기에 등장한 사람들 — 장기기억 relations 를 행성 주민으로 */}
+      <PlanetPeople radius={0.6} ratio={0.3} onSelect={onPerson} />
 
       {/* 행성 표면 위 모모 — 새 표면 (0.6) 위에 살짝 띄움 */}
       <group position={[0, 0.6, 0]}>

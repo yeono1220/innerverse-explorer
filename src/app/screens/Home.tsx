@@ -10,6 +10,7 @@ import { EmotionBar } from "../ui/emotion";
 import { useUserStore, todayStr, REWARDS } from "@/store/userStore";
 import { useAppStore } from "@/store/appStore";
 import { useDiaryStore, weekSummary } from "@/store/diaryStore";
+import { useRelationsStore } from "@/store/relationsStore";
 import { useGalaxyStore } from "@/store/galaxyStore";
 import { STAGES, STAGE_LIST, streakToStage } from "@/diorama/growth";
 
@@ -28,6 +29,7 @@ export default function Home() {
   const questDone = questsDate === todayStr() ? quests.filter((q) => q.done).length : 0;
   const entries = useDiaryStore((s) => s.entries);
   const planetCount = useGalaxyStore((s) => s.planets.length);
+  const peopleCount = useRelationsStore((s) => s.people.length);
   const summary = weekSummary(entries.slice(0, 5)).slice(0, 3);
   const stage = streakToStage(user.streak);
   const stageSpec = STAGES[stage];
@@ -83,8 +85,17 @@ export default function Home() {
           <LevelBar />
         </div>
 
-        <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 4px" }}>
-          <HomeAvatarStage size={210} onClick={() => nav("/glass")} />
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 0 4px" }}>
+          <HomeAvatarStage
+            size={210}
+            onClick={() => nav("/glass")}
+            onPerson={(name) => nav(`/search?q=${encodeURIComponent(name)}`)}
+          />
+          {peopleCount > 0 && (
+            <div style={{ fontSize: 11, color: "var(--iv-txt3)", marginTop: 2, textAlign: "center" }}>
+              행성에 {peopleCount}명이 살고 있어요 · 눌러서 그 사람과의 기록 보기
+            </div>
+          )}
         </div>
 
         {/* 모모 7일 성장기 — 작은 진행 카드 */}

@@ -5,6 +5,7 @@
 // 일기·레벨·행성 이름을 그대로 보게 된다. 그 정리를 여기서 한곳에 모은다.
 import { useDiaryStore } from "./diaryStore";
 import { useUserStore } from "./userStore";
+import { useRelationsStore } from "./relationsStore";
 import { useGalaxyStore } from "./galaxyStore";
 import { useAppStore } from "./appStore";
 import { useUsageStore } from "./usageStore";
@@ -54,6 +55,7 @@ export function clearLocalUserData() {
   // 화면이 이미 들고 있는 메모리 상태도 즉시 비운다.
   useDiaryStore.getState().reset();
   useUserStore.getState().reset();
+  useRelationsStore.getState().reset();
   useGalaxyStore.getState().reset();
   useAppStore.getState().reset();
   useUsageStore.getState().reset();

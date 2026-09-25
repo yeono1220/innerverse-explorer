@@ -9,6 +9,7 @@ import { planetRot } from "./sharedRefs";
 import { SurfaceFormations } from "./SurfaceFormations";
 import { GlassMomo } from "./GlassMomo";
 import { PlanetItems } from "@/planet-items/PlanetItems";
+import { PlanetPeople } from "@/planet-items/PlanetPeople";
 
 export function GlassPlanet() {
   const branch = useEmotionStore((s) => s.branch);
@@ -125,6 +126,7 @@ export function GlassPlanet() {
 
       {/* 인벤토리에서 구매한 아이템 (행성 반지름 1.56 기준) */}
       <PlanetItems radius={1.56} ratio={0.28} />
+      <PlanetPeople radius={1.56} ratio={0.24} />
 
       {/* 모모 (행성 표면에 얹힘) */}
       <group position={[0, 0, 1.7]}>

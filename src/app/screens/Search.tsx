@@ -1,6 +1,6 @@
 // 21 · 검색 결과 (키워드 하이라이트 + 필터)
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { StatusBar, AppBar, Body } from "../ui/layout";
 import { Card, Chip } from "../ui/primitives";
 import { EmotionTag } from "../ui/emotion";
@@ -31,7 +31,8 @@ function formatDate(iso: string) {
 export default function Search() {
   const nav = useNavigate();
   const entries = useDiaryStore((s) => s.entries);
-  const [q, setQ] = useState("");
+  const [params] = useSearchParams();
+  const [q, setQ] = useState(params.get("q") ?? "");
   const [filter, setFilter] = useState<EmotionLabel | "전체">("전체");
 
   const results = useMemo(() => {

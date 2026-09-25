@@ -83,6 +83,18 @@ export async function reflect(): Promise<void> {
       { onConflict: "user_id,name" },
     );
   }
+  void refreshRelations();
+}
+
+/** 행성 주민 캐시 갱신 (순환 import 방지를 위해 동적 로드) */
+async function refreshRelations() {
+  try {
+    const m = await import("@/store/relationsStore");
+    m.useRelationsStore.getState().reset();
+    await m.useRelationsStore.getState().load();
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function deleteFact(id: string): Promise<void> {
@@ -90,4 +102,5 @@ export async function deleteFact(id: string): Promise<void> {
 }
 export async function deleteRelation(id: string): Promise<void> {
   await getSupabase().from("relations").delete().eq("id", id);
+  void refreshRelations();
 }
